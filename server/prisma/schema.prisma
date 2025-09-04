@@ -1,0 +1,166 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/* ===================== Enums ===================== */
+
+enum Role {
+  STUDENT
+  ADMIN
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  REJECTED
+}
+
+/* ===================== Models ===================== */
+
+model User {
+  id        String    @id @default(cuid())
+  name      String
+  email     String    @unique
+  password  String
+  role      Role      @default(STUDENT)
+  createdAt DateTime  @default(now())
+
+  // relations
+  bookings  Booking[]
+  decisions Booking[] @relation("DecisionBy") // bookings this user decided (approved/rejected)
+}
+
+model Building {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  floors    Floor[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Floor {
+  id          String    @id @default(cuid())
+  name        String
+  buildingId  String
+  building    Building  @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  rooms       Room[]
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([buildingId, name]) // floor name unique within a building
+}
+
+model Room {
+  id        String   @id @default(cuid())
+  name      String
+  capacity  Int      @default(4)
+  equipment Json     @default("{}")
+  photoUrl  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  floorId   String
+  floor     Floor    @relation(fields: [floorId], references: [id], onDelete: Cascade)
+
+  // relations
+  bookings   Booking[]
+  openHours  RoomOpenHour[]
+  closures   RoomClosure[]
+
+  slotNotes RoomSlotNote[]
+
+  @@unique([floorId, name]) // room name unique within a floor
+  @@index([floorId])
+}
+
+model RoomSlotNote {
+  id        String  @id @default(cuid())
+  roomId    String
+  weekday   Int     // 1..6 (Mon..Sat) — keep consistent with your frontend
+  startHHMM String  // "07:00"
+  endHHMM   String  // "09:00"
+  professor String  @default("")
+  course    String  @default("")
+
+  room      Room    @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@unique([roomId, weekday, startHHMM, endHHMM])
+}
+
+model Booking {
+  id        String        @id @default(cuid())
+  roomId    String
+  userId    String
+  startTs   DateTime
+  endTs     DateTime
+  status    BookingStatus @default(PENDING)
+  reason    String?       // why the student wants the room
+  studentId String?       // student’s campus ID, optional
+  createdAt DateTime      @default(now())
+
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id])
+
+  // back-rel for User.decisions ("DecisionBy")
+  decidedById String?
+  decidedBy   User?   @relation("DecisionBy", fields: [decidedById], references: [id], onDelete: SetNull)
+
+  // back-rel for AdminNotification.booking
+  adminNotifications AdminNotification[]
+
+  @@index([roomId, startTs, endTs])
+}
+
+/** Campus weekly open hours (per room, per weekday) */
+model RoomOpenHour {
+  id        String  @id @default(cuid())
+  roomId    String
+  weekday   Int     // 0=Sun ... 6=Sat
+  startHHMM String  // "08:00"
+  endHHMM   String  // "22:00"
+
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+}
+
+/** Special closures (whole-day ranges) */
+model RoomClosure {
+  id        String   @id @default(cuid())
+  roomId    String
+  startDate DateTime // treat as whole-day start (UTC 00:00)
+  endDate   DateTime // whole-day end (UTC 23:59:59)
+  reason    String?
+
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@index([roomId, startDate, endDate])
+}
+
+/** Optional: simple admin notifications (e.g., for new booking requests) */
+model AdminNotification {
+  id        String    @id @default(cuid())
+  type      String    // e.g., "BOOKING_REQUEST"
+  bookingId String?
+  createdAt DateTime  @default(now())
+  readAt    DateTime?
+
+  booking   Booking?  @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+}
+
+/** Keep if you already use it for global settings */
+model Policy {
+  id    String @id @default(cuid())
+  key   String @unique
+  value String
+}
+
+
