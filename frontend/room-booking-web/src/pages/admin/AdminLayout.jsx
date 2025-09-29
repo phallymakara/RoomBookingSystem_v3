@@ -1,5 +1,6 @@
 // src/pages/admin/AdminLayout.jsx
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { openAdminEvents } from '../../api';
 import { NavLink, Outlet } from 'react-router-dom';
 
 const COLORS = { primary: '#272446', accent: '#c01d2e' };
@@ -10,6 +11,20 @@ const RAIL_W = 64;       // collapsed icon-only width
 
 export default function AdminLayout() {
         const [sidebarOpen, setSidebarOpen] = useState(true);
+
+        const [unread, setUnread] = useState(0);
+        useEffect(() => {
+                const token = localStorage.getItem('token') || '';
+                if (!token) return;
+                const es = openAdminEvents(token);
+                es.onmessage = (ev) => {
+                        try {
+                                const msg = JSON.parse(ev.data);
+                                if (msg?.type === 'BOOKING_REQUEST_CREATED') setUnread(u => u + 1);
+                        } catch { }
+                };
+                return () => es.close();
+        }, []);
 
         return (
                 // Admin shell: fill viewport minus navbar, NO outer scroll
@@ -71,7 +86,7 @@ export default function AdminLayout() {
                                                 <AdminLink to="/admin/overview" icon="bi-speedometer2" label="Overview" collapsed={!sidebarOpen} />
                                                 <AdminLink to="/admin/floors" icon="bi-columns" label="Building" collapsed={!sidebarOpen} />
                                                 <AdminLink to="/admin/rooms" icon="bi-door-closed" label="Rooms" collapsed={!sidebarOpen} />
-                                                <AdminLink to="/admin/requests" icon="bi-bell" label="Requests" collapsed={!sidebarOpen} />
+                                                <AdminLink to="/admin/requests" icon="bi-bell" label={`Requests${unread ? ` (${unread})` : ''}`} collapsed={!sidebarOpen} />
                                                 <AdminLink to="/admin/historys" icon="bi-bar-chart" label="History" collapsed={!sidebarOpen} />
                                                 <AdminLink to="/admin/settings" icon="bi-gear" label="Setting" collapsed={!sidebarOpen} />
                                         </nav>
@@ -110,23 +125,31 @@ export default function AdminLayout() {
         );
 }
 
+// src/pages/admin/AdminLayout.jsx (or wherever AdminLink is declared)
 function AdminLink({ to, icon, label, collapsed }) {
+        const base =
+                'nav-link d-flex align-items-center rounded-3 position-relative';
+
         return (
                 <NavLink
                         to={to}
                         className={({ isActive }) =>
-                                'nav-link d-flex align-items-center rounded-3 position-relative ' +
-                                (collapsed ? 'justify-content-center py-2' : 'px-3 py-2') +
-                                (isActive ? ' text-white shadow-sm' : '')
+                                [
+                                        base,
+                                        collapsed ? 'justify-content-center py-2' : 'px-3 py-2',
+                                        isActive ? 'text-white shadow-sm' : ''
+                                ]
+                                        .filter(Boolean)
+                                        .join(' ')
                         }
                         style={({ isActive }) => ({
                                 color: isActive ? '#fff' : COLORS.primary,
                                 backgroundColor: isActive ? COLORS.primary : 'transparent',
                                 transition: `background-color ${DUR}ms ${EASE}, color ${DUR}ms ${EASE}, transform ${DUR}ms ${EASE}, padding ${DUR}ms ${EASE}`,
                                 paddingLeft: collapsed ? 0 : 12,
-                                paddingRight: collapsed ? 0 : 12,
+                                paddingRight: collapsed ? 0 : 12
                         })}
-                        title={collapsed ? label : undefined} // tooltip when collapsed
+                        title={collapsed ? label : undefined}
                         onMouseEnter={(e) => {
                                 const active = e.currentTarget.classList.contains('text-white');
                                 if (!active) {
@@ -142,7 +165,7 @@ function AdminLink({ to, icon, label, collapsed }) {
                                 }
                         }}
                 >
-                        {/* Optional active indicator bar for collapsed mode */}
+                        {/* indicator bar (optional, for collapsed) */}
                         <span
                                 className="position-absolute start-0 top-0 h-100"
                                 style={{
@@ -150,11 +173,14 @@ function AdminLink({ to, icon, label, collapsed }) {
                                         backgroundColor: COLORS.accent,
                                         borderTopRightRadius: 4,
                                         borderBottomRightRadius: 4,
-                                        opacity: 0, // kept off by default; see note below
+                                        opacity: 0
                                 }}
                         />
-                        <i className={`bi ${icon} ${collapsed ? '' : 'me-2'}`}></i>
-                        <span style={{ display: collapsed ? 'none' : 'inline', whiteSpace: 'nowrap' }}>
+
+                        <i className={`bi ${icon} ${collapsed ? '' : 'me-2'}`} />
+
+                        {/* IMPORTANT: use classes to show/hide; avoid inline display toggles */}
+                        <span className={collapsed ? 'd-none' : 'd-inline'} style={{ whiteSpace: 'nowrap' }}>
                                 {label}
                         </span>
                 </NavLink>

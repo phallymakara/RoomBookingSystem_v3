@@ -59,11 +59,11 @@ export async function getAvailability(
 
 /* ---------- student: create booking REQUEST (PENDING) ---------- */
 /* backend route from your routes file: POST /bookings/booking-requests */
-export async function requestBooking(token, { roomId, startTs, endTs, reason, studentId }) {
+export async function requestBooking(token, { roomId, startTs, endTs, reason, studentId, courseName }) {
         const res = await fetch(`${BASE}/bookings/booking-requests`, {
                 method: 'POST',
                 headers: auth(token),
-                body: JSON.stringify({ roomId, startTs, endTs, reason, studentId })
+                body: JSON.stringify({ roomId, startTs, endTs, reason, studentId, courseName })
         });
         return handle(res);
 }
@@ -265,19 +265,39 @@ export async function deleteRoom(token, roomId) {
 }
 
 // Slot notes
-export async function getRoomSlotNotes(tokenOrRoomId, maybeRoomId) {
-        const roomId = maybeRoomId || tokenOrRoomId;
-        const headers = maybeRoomId ? { Authorization: `Bearer ${tokenOrRoomId}` } : undefined;
-        const res = await fetch(`${BASE}/rooms/${roomId}/slot-notes`, { headers });
-        return handle(res);
-}
-export async function setRoomSlotNotes(token, roomId, notes /* array */) {
-        const res = await fetch(`${BASE}/rooms/${roomId}/slot-notes`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify(notes || []),
-        });
-        if (!res.ok && res.status !== 204) return handle(res);
-        return true;
+export async function getRoomSlotNotes(token, roomId) {
+        const res = await fetch(`${BASE}/rooms/${roomId}/slot-notes`, { headers: auth(token) });
+        return handle(res); // returns []
 }
 
+export async function setRoomSlotNotes(token, roomId, notesArray) {
+        const res = await fetch(`${BASE}/rooms/${roomId}/slot-notes`, {
+                method: 'PUT',
+                headers: auth(token),
+                body: JSON.stringify(notesArray),  // IMPORTANT: raw array, not {notes: ...}
+        });
+        if (res.status === 204) return true;
+        return handle(res);
+}
+
+
+export async function clearRoomSlotNote(token, roomId, { weekday, startHHMM, endHHMM }) {
+        const res = await fetch(`${BASE}/rooms/${roomId}/slot-notes`, {
+                method: 'DELETE',
+                headers: auth(token),
+                body: JSON.stringify({ weekday, startHHMM, endHHMM }),
+        });
+        if (res.status === 204) return true;
+        return handle(res);
+}
+
+
+// Student Booking Request
+export function openAdminEvents(token) {
+        // Attach token via query (SSE doesn't let us set headers in EventSource).
+        const url = new URL(`${BASE}/events/admin`);
+        url.searchParams.set('token', token);
+        // If your authGuard reads from Authorization header only, adjust the backend
+        // to also accept ?token=... (quick tweak in authGuard), or switch to a cookie.
+        return new EventSource(url.toString(), { withCredentials: false });
+}

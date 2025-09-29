@@ -3,6 +3,7 @@ import { Router } from 'express';
 import { prisma } from '../prisma.js';
 import { z } from 'zod';
 import { authGuard, requireAdmin } from '../authGuard.js';
+import { emitAdmin } from '../lib/events.js';
 
 const router = Router();
 
@@ -25,6 +26,7 @@ const requestCreateSchema = z.object({
         endTs: z.coerce.date(),
         reason: z.string().max(500).optional(),
         studentId: z.string().max(64).optional(),
+        courseName: z.string().max(120).optional(),
 }).refine((d) => d.endTs > d.startTs, {
         message: 'endTs must be after startTs', path: ['endTs']
 });
@@ -44,7 +46,7 @@ async function hasOverlap({ roomId, startTs, endTs, excludeId }) {
         return count > 0;
 }
 
-// Approval considers both PENDING + CONFIRMED (except the request itself)
+// Approval considers both PENDING  CONFIRMED (except the request itself)
 async function hasOverlapForApproval({ roomId, startTs, endTs, excludeId }) {
         const count = await prisma.booking.count({
                 where: {
@@ -84,13 +86,13 @@ router.post('/booking-requests', authGuard, async (req, res) => {
         const parse = requestCreateSchema.safeParse(req.body);
         if (!parse.success) return res.status(400).json({ error: parse.error.flatten() });
 
-        const { roomId, startTs, endTs, reason, studentId } = parse.data;
+        const { roomId, startTs, endTs, reason, studentId, courseName } = parse.data;
 
         const policyErr = checkPolicies({ startTs, endTs });
         if (policyErr) return res.status(400).json({ error: policyErr });
 
-        const room = await prisma.room.findUnique({ where: { id: roomId } });
-        if (!room || !room.isActive) return res.status(404).json({ error: 'Room not found or inactive' });
+        const room = await prisma.room.findUnique({ where: { id: roomId }, select: { id: true } });
+        if (!room) return res.status(404).json({ error: 'Room not found' });
 
         // allow multiple PENDINGs if you prefer; here we only block against CONFIRMED
         if (await hasOverlap({ roomId, startTs, endTs })) {
@@ -106,12 +108,32 @@ router.post('/booking-requests', authGuard, async (req, res) => {
                         status: 'PENDING',
                         reason: reason || null,
                         studentId: studentId || null,
+                        courseName: courseName || null,
                 },
                 include: { room: true, user: true },
         });
 
-        // Optional: create admin notification
-        // await prisma.adminNotification.create({ data: { type: 'BOOKING_REQUEST', bookingId: booking.id } });
+        // Persist (optional) and notify admins in real time
+        try {
+                // Optional persistence for unread counts
+                // await prisma.adminNotification.create({ data: { type: 'BOOKING_REQUEST', bookingId: booking.id } });
+                await emitAdmin({
+                        type: 'BOOKING_REQUEST_CREATED',
+                        payload: {
+                                id: booking.id,
+                                roomId: booking.roomId,
+                                roomName: booking.room?.name ?? 'Unknown Room',
+                                userName: booking.user?.name ?? 'Unknown User',
+                                startTs: booking.startTs,
+                                endTs: booking.endTs,
+                        }
+                });
+        } catch (error) {
+                // Log non-fatal error
+                console.error('Failed to notify admins:', error);
+        }
+
+
 
         return res.status(201).json(booking);
 });
@@ -172,6 +194,31 @@ router.post('/admin/booking-requests/:id/approve', authGuard, requireAdmin, asyn
                 },
         });
 
+        try {
+                await emitAdmin({
+                        type: 'BOOKING_REQUEST_DECIDED',
+                        payload: {
+                                id: updated.id,
+                                status: updated.status, // 'CONFIRMED'
+                                roomId: updated.roomId,
+                                startTs: updated.startTs,
+                                endTs: updated.endTs,
+                        }
+                });
+        } catch (error) {
+                // Log non-fatal error
+                console.error('Failed to notify admins:', error);
+        }
+
+        try {
+                emitAdmin({
+                        type: 'BOOKING_REQUEST_DECIDED',
+                        payload: {
+                                id: updated.id,
+                                status: updated.status, // 'CONFIRMED'
+                        }
+                });
+        } catch { }
         res.json(updated);
 });
 
@@ -218,8 +265,9 @@ router.post('/', authGuard, async (req, res) => {
         const policyErr = checkPolicies({ startTs, endTs });
         if (policyErr) return res.status(400).json({ error: policyErr });
 
-        const room = await prisma.room.findUnique({ where: { id: roomId } });
-        if (!room || !room.isActive) return res.status(404).json({ error: 'Room not found or inactive' });
+        const room = await prisma.room.findUnique({ where: { id: roomId }, select: { id: true } });
+        if (!room) return res.status(404).json({ error: 'Room not found' });
+
 
         if (await hasOverlap({ roomId, startTs, endTs })) {
                 return res.status(409).json({ error: 'Time slot overlaps an existing booking' });
@@ -263,8 +311,8 @@ router.patch('/:id', authGuard, async (req, res) => {
         const policyErr = checkPolicies({ startTs, endTs });
         if (policyErr) return res.status(400).json({ error: policyErr });
 
-        const room = await prisma.room.findUnique({ where: { id: roomId } });
-        if (!room || !room.isActive) return res.status(404).json({ error: 'Room not found or inactive' });
+        const room = await prisma.room.findUnique({ where: { id: roomId }, select: { id: true } });
+        if (!room) return res.status(404).json({ error: 'Room not found' });
 
         if (await hasOverlap({ roomId, startTs, endTs, excludeId: bookingId })) {
                 return res.status(409).json({ error: 'Time slot overlaps an existing booking' });

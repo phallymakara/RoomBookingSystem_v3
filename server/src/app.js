@@ -11,6 +11,9 @@ import bookingsRouter from './routes/bookings.js'; // <-- add this
 import buildingsRouter from './routes/buildings.js';
 import { authGuard } from './authGuard.js';
 
+// Event 
+import eventsRouter from './routes/events.js';
+
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -23,6 +26,7 @@ app.use('/floors', floorsRouter);
 app.use('/rooms', roomsRouter);
 app.use('/buildings', buildingsRouter);
 app.use('/bookings', bookingsRouter); // <-- add this
+app.use('/events', eventsRouter);
 
 // Example protected route
 app.get('/me', authGuard, async (req, res) => {

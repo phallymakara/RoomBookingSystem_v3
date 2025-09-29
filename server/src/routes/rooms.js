@@ -314,6 +314,83 @@ router.put('/:roomId/slot-notes', requireAuth, requireRole('ADMIN'), async (req,
         }
 });
 
+/* ---- NEW single-slot add/update (for Approve) ---- */
+// POST /rooms/:roomId/slot-notes  { weekday,startHHMM,endHHMM,professor?,course? }
+const slotNoteOneSchema = z.object({
+        weekday: z.coerce.number().int().min(1).max(6),
+        startHHMM: z.string().regex(/^\d{2}:\d{2}$/),
+        endHHMM: z.string().regex(/^\d{2}:\d{2}$/),
+        professor: z.string().optional().default(''),
+        course: z.string().optional().default(''),
+});
+
+router.post('/:roomId/slot-notes', requireAuth, requireRole('ADMIN'), async (req, res) => {
+        const { roomId } = req.params;
+        try {
+                const n = slotNoteOneSchema.parse(req.body || {});
+                const payload = {
+                        roomId,
+                        weekday: n.weekday,
+                        startHHMM: n.startHHMM,
+                        endHHMM: n.endHHMM,
+                        professor: (n.professor || '').trim(),
+                        course: (n.course || '').trim(),
+                };
+
+                // safe upsert without requiring a composite unique: delete exact then create
+                await prisma.$transaction([
+                        prisma.roomSlotNote.deleteMany({
+                                where: {
+                                        roomId,
+                                        weekday: payload.weekday,
+                                        startHHMM: payload.startHHMM,
+                                        endHHMM: payload.endHHMM,
+                                }
+                        }),
+                        prisma.roomSlotNote.create({ data: payload }),
+                ]);
+
+                res.status(201).json({ ok: true });
+        } catch (e) {
+                if (e instanceof z.ZodError) {
+                        return res.status(400).json({ error: e.errors?.[0]?.message || 'Invalid payload' });
+                }
+                if (e?.code === 'P2003') {
+                        return res.status(400).json({ error: 'Invalid roomId' });
+                }
+                res.status(500).json({ error: 'Failed to save slot note' });
+        }
+});
+
+/* ---- NEW single-slot delete (for Reject/Cancel) ---- */
+// DELETE /rooms/:roomId/slot-notes  { weekday,startHHMM,endHHMM }
+const slotNoteKeySchema = z.object({
+        weekday: z.coerce.number().int().min(1).max(6),
+        startHHMM: z.string().regex(/^\d{2}:\d{2}$/),
+        endHHMM: z.string().regex(/^\d{2}:\d{2}$/),
+});
+
+router.delete('/:roomId/slot-notes', requireAuth, requireRole('ADMIN'), async (req, res) => {
+        const { roomId } = req.params;
+        try {
+                const k = slotNoteKeySchema.parse(req.body || {});
+                await prisma.roomSlotNote.deleteMany({
+                        where: {
+                                roomId,
+                                weekday: k.weekday,
+                                startHHMM: k.startHHMM,
+                                endHHMM: k.endHHMM,
+                        },
+                });
+                res.status(204).end();
+        } catch (e) {
+                if (e instanceof z.ZodError) {
+                        return res.status(400).json({ error: e.errors?.[0]?.message || 'Invalid payload' });
+                }
+                res.status(500).json({ error: 'Failed to delete slot note' });
+        }
+});
+
 // --- OPEN HOURS ---
 // GET /rooms/:roomId/open-hours  (public read)
 router.get('/:roomId/open-hours', async (req, res) => {
@@ -365,6 +442,5 @@ router.put('/:roomId/open-hours', requireAuth, requireRole('ADMIN'), async (req,
                 res.status(500).json({ error: 'Failed to save open hours' });
         }
 });
-
 
 export default router;

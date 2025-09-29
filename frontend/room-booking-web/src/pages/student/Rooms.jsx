@@ -182,10 +182,15 @@ export default function RoomsStudent() {
                                                 if (!slot) continue;
                                                 nMap[rid] = nMap[rid] || {};
                                                 nMap[rid][n.weekday] = nMap[rid][n.weekday] || {};
-                                                nMap[rid][n.weekday][slot.key] = { professor: n.professor || '', course: n.course || '' };
+                                                nMap[rid][n.weekday][slot.key] = {
+                                                        professor: n.professor || '',
+                                                        course: n.course || '',
+                                                        reason: n.reason || '',
+                                                };
                                         }
                                 }
                                 setNotesMap(nMap);
+
 
                         } catch (e) {
                                 setErr(e.message || 'Failed to load rooms');
@@ -317,6 +322,7 @@ export default function RoomsStudent() {
                         studentId: '',
                         name: '',
                         reason: '',
+                        courseName: '',
                 });
         }
 
@@ -331,19 +337,18 @@ export default function RoomsStudent() {
                                 alert('Please enter your Student ID.');
                                 return;
                         }
-                        const { roomId, startTs, endTs, studentId, name, reason } = booking;
-                        const pieces = [];
-                        if (studentId?.trim()) pieces.push(`StudentID: ${studentId.trim()}`);
-                        if (name?.trim()) pieces.push(name.trim());
-                        if (reason?.trim()) pieces.push(reason.trim());
-                        const finalReason = pieces.join(' — ') || 'Room booking request';
 
+                        const { roomId, startTs, endTs, studentId, name, reason, courseName } = booking;
+
+                        // Send separate fields (cleaner for admin UI / backend)
                         await requestBooking(token, {
                                 roomId,
                                 startTs,
                                 endTs,
-                                reason: finalReason,
-                                studentId: studentId?.trim() || undefined, // safe to send if API supports it
+                                studentId: studentId?.trim(),
+                                name: name?.trim() || undefined,
+                                reason: reason?.trim() || undefined,
+                                courseName: courseName?.trim() || undefined,
                         });
 
                         setBooking(null);
@@ -352,6 +357,7 @@ export default function RoomsStudent() {
                         alert(e.message || 'Failed to submit booking request');
                 }
         }
+
 
         // UI helpers
         const lineEllipsis = {
@@ -468,7 +474,7 @@ export default function RoomsStudent() {
                                                                                                         const title = available
                                                                                                                 ? 'Available (click to book)'
                                                                                                                 : note
-                                                                                                                        ? `${note.professor || 'In use'}${note.course ? '\n' + note.course : ''}`
+                                                                                                                        ? `${note.professor || 'In use'}${note.course ? '\n' + note.course : ''}${note.reason ? '\n' + note.reason : ''}`
                                                                                                                         : 'In use';
 
                                                                                                         return (
@@ -528,7 +534,20 @@ export default function RoomsStudent() {
                                                                                                                                                 >
                                                                                                                                                         {note?.course?.trim() || ''}
                                                                                                                                                 </span>
+                                                                                                                                                {note?.reason?.trim() && (
+                                                                                                                                                        <span
+                                                                                                                                                                style={{
+                                                                                                                                                                        ...lineEllipsis,
+                                                                                                                                                                        fontSize: SLOT_TEXT_PX,
+                                                                                                                                                                        lineHeight: SLOT_LINE_HEIGHT,
+                                                                                                                                                                        textAlign: 'center',
+                                                                                                                                                                }}
+                                                                                                                                                        >
+                                                                                                                                                                {note.reason.trim()}
+                                                                                                                                                        </span>
+                                                                                                                                                )}
                                                                                                                                         </span>
+
                                                                                                                                 )}
                                                                                                                         </button>
                                                                                                                 </td>
@@ -580,6 +599,15 @@ export default function RoomsStudent() {
                                                                         value={booking.studentId}
                                                                         onChange={(e) => setBooking(b => ({ ...b, studentId: e.target.value }))}
                                                                         placeholder="e.g., e2021...."
+                                                                />
+                                                        </div>
+                                                        +<div className="mb-2">
+                                                                <label className="form-label small mb-1">Course name</label>
+                                                                <input
+                                                                        className="form-control form-control-sm"
+                                                                        value={booking.courseName}
+                                                                        onChange={(e) => setBooking(b => ({ ...b, courseName: e.target.value }))}
+                                                                        placeholder="e.g., Data Structures"
                                                                 />
                                                         </div>
                                                         <div className="mb-3">
