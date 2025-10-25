@@ -91,7 +91,7 @@ model RoomSlotNote {
   endHHMM   String  // "09:00"
   professor String  @default("")
   course    String  @default("")
-
+  reason    String?
   room      Room    @relation(fields: [roomId], references: [id], onDelete: Cascade)
 
   @@unique([roomId, weekday, startHHMM, endHHMM])
@@ -105,6 +105,7 @@ model Booking {
   endTs     DateTime
   status    BookingStatus @default(PENDING)
   reason    String?       // why the student wants the room
+  cancelReason   String?
   studentId String?       // student’s campus ID, optional
   courseName String?      
   createdAt DateTime      @default(now())

@@ -155,6 +155,17 @@ export async function addRoomClosure(token, roomId, { startDate, endDate, reason
         return handle(res);
 }
 
+// frontend/src/api.js
+export async function addRoomSlotNote(token, roomId, { weekday, startHHMM, endHHMM, professor, course }) {
+        const res = await fetch(`${BASE}/rooms/${roomId}/slot-notes`, {
+                method: 'POST',
+                headers: auth(token),
+                body: JSON.stringify({ weekday, startHHMM, endHHMM, professor, course })
+        });
+        return handle(res); // { ok: true }
+}
+
+
 export async function getRoomClosures(token, roomId, { from, to } = {}) {
         const qs = new URLSearchParams();
         if (from) qs.set('from', from);
@@ -264,21 +275,25 @@ export async function deleteRoom(token, roomId) {
         return handle(res);
 }
 
-// Slot notes
+// ADD or VERIFY these helpers look exactly like this:
 export async function getRoomSlotNotes(token, roomId) {
-        const res = await fetch(`${BASE}/rooms/${roomId}/slot-notes`, { headers: auth(token) });
-        return handle(res); // returns []
+        const res = await fetch(`${BASE}/rooms/${roomId}/slot-notes`, {
+                headers: auth(token),
+        });
+        return handle(res); // returns an array
 }
 
+// IMPORTANT: body must be a RAW ARRAY ([]) — NOT { notes: [...] }
 export async function setRoomSlotNotes(token, roomId, notesArray) {
         const res = await fetch(`${BASE}/rooms/${roomId}/slot-notes`, {
                 method: 'PUT',
                 headers: auth(token),
-                body: JSON.stringify(notesArray),  // IMPORTANT: raw array, not {notes: ...}
+                body: JSON.stringify(notesArray),
         });
         if (res.status === 204) return true;
         return handle(res);
 }
+
 
 
 export async function clearRoomSlotNote(token, roomId, { weekday, startHHMM, endHHMM }) {
@@ -301,3 +316,82 @@ export function openAdminEvents(token) {
         // to also accept ?token=... (quick tweak in authGuard), or switch to a cookie.
         return new EventSource(url.toString(), { withCredentials: false });
 }
+
+// ----- admin stats -----
+export async function getAdminStats(token, { tzOffsetMinutes } = {}) {
+        const qs = new URLSearchParams();
+        if (typeof tzOffsetMinutes === 'number') qs.set('tzOffsetMinutes', String(tzOffsetMinutes));
+        const res = await fetch(`${BASE}/stats${qs.toString() ? `?${qs}` : ''}`, {
+                headers: { Authorization: `Bearer ${token}` }
+        });
+        return handle(res);
+}
+
+export async function getBookingHistory(token, { statuses = [], page = 1, pageSize = 20, q = '', sort = 'createdAt', order = 'desc' } = {}) {
+        const base = (import.meta?.env?.VITE_API_BASE_URL ?? '').toString().trim();
+        const prefix = base === '' ? '' : (base.endsWith('/') ? base.slice(0, -1) : base);
+        let url = `${prefix}/history`;
+
+        const qs = new URLSearchParams();
+        if (statuses.length) qs.set('status', statuses.join(','));
+        if (page) qs.set('page', String(page));
+        if (pageSize) qs.set('pageSize', String(pageSize));
+        if (q) qs.set('q', q);
+        if (sort) qs.set('sort', sort);
+        if (order) qs.set('order', order);
+        const query = qs.toString();
+        if (query) url += `?${query}`;
+
+        const res = await fetch(url, {
+                headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        });
+
+        if (!res.ok) {
+                const text = await res.text().catch(() => '');
+                throw new Error(text || `Failed to fetch history (${res.status})`);
+        }
+        return res.json();
+}
+
+
+// ---- tiny URL builder that won't throw ----
+function buildApiUrl(path, qsObj) {
+        // path like "stats" or "/history"
+        const p = path.startsWith('/') ? path : `/${path}`;
+
+        // Read env
+        const raw = (import.meta?.env?.VITE_API_BASE_URL ?? '').toString().trim();
+
+        // Decide the base:
+        // - empty => same-origin
+        // - starts with http(s):// => absolute
+        // - starts with / => relative base (e.g., "/api")
+        // - otherwise treat as host:port and prepend http://
+        let base = '';
+        if (!raw) {
+                base = ''; // same origin
+        } else if (/^https?:\/\//i.test(raw)) {
+                base = raw.replace(/\/+$/, '');
+        } else if (raw.startsWith('/')) {
+                base = raw.replace(/\/+$/, '');
+        } else {
+                // "localhost:3000" -> "http://localhost:3000"
+                base = `http://${raw.replace(/\/+$/, '')}`;
+        }
+
+        let url = `${base}${p}`;
+
+        if (qsObj && typeof qsObj === 'object') {
+                const qs = new URLSearchParams();
+                for (const [k, v] of Object.entries(qsObj)) {
+                        if (v === undefined || v === null || v === '') continue;
+                        if (Array.isArray(v) && v.length === 0) continue;
+                        qs.set(k, Array.isArray(v) ? v.join(',') : String(v));
+                }
+                const s = qs.toString();
+                if (s) url += `?${s}`;
+        }
+
+        return url;
+}
+

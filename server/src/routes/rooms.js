@@ -275,6 +275,7 @@ const slotNoteSchema = z.array(z.object({
         endHHMM: z.string().regex(/^\d{2}:\d{2}$/),
         professor: z.string().optional().default(''),
         course: z.string().optional().default(''),
+        reason: z.string().optional().default(''),
 })).default([]);
 
 router.put('/:roomId/slot-notes', requireAuth, requireRole('ADMIN'), async (req, res) => {
@@ -289,6 +290,7 @@ router.put('/:roomId/slot-notes', requireAuth, requireRole('ADMIN'), async (req,
                         endHHMM: n.endHHMM,
                         professor: (n.professor || '').trim(),
                         course: (n.course || '').trim(),
+                        reason: (n.reason || '').trim(),
                 }));
 
                 await prisma.$transaction([
@@ -322,6 +324,7 @@ const slotNoteOneSchema = z.object({
         endHHMM: z.string().regex(/^\d{2}:\d{2}$/),
         professor: z.string().optional().default(''),
         course: z.string().optional().default(''),
+        reason: z.string().optional().default(''),
 });
 
 router.post('/:roomId/slot-notes', requireAuth, requireRole('ADMIN'), async (req, res) => {
@@ -335,6 +338,7 @@ router.post('/:roomId/slot-notes', requireAuth, requireRole('ADMIN'), async (req
                         endHHMM: n.endHHMM,
                         professor: (n.professor || '').trim(),
                         course: (n.course || '').trim(),
+                        reason
                 };
 
                 // safe upsert without requiring a composite unique: delete exact then create

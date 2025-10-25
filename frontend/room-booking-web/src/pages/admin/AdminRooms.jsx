@@ -11,6 +11,7 @@ import {
         setRoomSlotNotes,
 } from '../../api';
 
+
 const BRAND = '#272446';
 const IN_USE = '#bd1e30';
 
@@ -592,7 +593,8 @@ export default function AdminRooms() {
                                                 startHHMM: s.startHHMM,
                                                 endHHMM: s.endHHMM,
                                                 professor: info.professor || '',
-                                                course: info.course || ''
+                                                course: info.course || '',
+                                                reason: info.reason || ''
                                         });
                                 }
                         }

@@ -7,12 +7,14 @@ import floorsRouter from './routes/floors.js';
 import { prisma } from './lib/prisma.js';
 import authRouter from './routes/auth.js';
 import roomsRouter from './routes/rooms.js';
-import bookingsRouter from './routes/bookings.js'; // <-- add this
+import bookingsRouter from './routes/bookings.js';
 import buildingsRouter from './routes/buildings.js';
+import historyRouter from './routes/history.js';
 import { authGuard } from './authGuard.js';
 
 // Event 
 import eventsRouter from './routes/events.js';
+import statsRouter from './routes/stats.js';
 
 const app = express();
 app.use(cors());
@@ -25,8 +27,10 @@ app.use('/auth', authRouter);
 app.use('/floors', floorsRouter);
 app.use('/rooms', roomsRouter);
 app.use('/buildings', buildingsRouter);
-app.use('/bookings', bookingsRouter); // <-- add this
+app.use('/bookings', bookingsRouter);
 app.use('/events', eventsRouter);
+app.use('/stats', statsRouter);
+app.use('/history', historyRouter);
 
 // Example protected route
 app.get('/me', authGuard, async (req, res) => {

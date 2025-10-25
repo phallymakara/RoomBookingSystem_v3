@@ -3,16 +3,23 @@ import {
         listBookingRequests,
         approveBookingRequest,
         rejectBookingRequest,
-        setRoomSlotNotes,
         getRoomSlotNotes,
+        setRoomSlotNotes,
+        cancelBooking,          // ✅ missing before
+        clearRoomSlotNote,      // ✅ missing before
+        openAdminEvents,
 } from '../../api';
-import { openAdminEvents } from '../../api';
 
 const COLORS = { primary: '#272446', accent: '#c01d2e' };
 const POLL_MS = 5000;
 
 export default function AdminRequests() {
         const token = localStorage.getItem('token') || '';
+
+        // ✅ all hooks live INSIDE the component
+        const [workingId, setWorkingId] = useState(null);
+        const [toast, setToast] = useState('');
+
         const [status, setStatus] = useState('PENDING'); // PENDING | CONFIRMED | REJECTED
         const [items, setItems] = useState([]);
         const [loading, setLoading] = useState(true);
@@ -21,14 +28,12 @@ export default function AdminRequests() {
         const prevPendingIdsRef = useRef(new Set());
         const audioRef = useRef(null);
 
-        // Ask for notification permission
         useEffect(() => {
                 if ('Notification' in window && Notification.permission === 'default') {
                         Notification.requestPermission().catch(() => { });
                 }
         }, []);
 
-        // preload beep
         useEffect(() => {
                 const beep = new Audio(
                         'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQgAAAAA'
@@ -50,7 +55,6 @@ export default function AdminRequests() {
                                 const curr = new Set(list.map(b => b.id));
                                 const prev = prevPendingIdsRef.current;
                                 const hasNew = [...curr].some(id => !prev.has(id));
-
                                 if (hasNew) {
                                         notifyAdminNewRequests(list.filter(b => !prev.has(b.id)));
                                         try { audioRef.current?.play().catch(() => { }); } catch { }
@@ -71,7 +75,6 @@ export default function AdminRequests() {
                 // eslint-disable-next-line react-hooks/exhaustive-deps
         }, [status]);
 
-        // realtime SSE
         useEffect(() => {
                 if (!token) return;
                 let es;
@@ -97,9 +100,10 @@ export default function AdminRequests() {
                 // eslint-disable-next-line react-hooks/exhaustive-deps
         }, [token, status]);
 
-        // ---------------- Approve / Reject ----------------
-
+        // ---------- Approve ----------
         async function onApprove(id) {
+                if (workingId) return;
+                setWorkingId(id);
                 try {
                         // optimistic row update
                         setItems(prev => prev.map(b => b.id === id ? { ...b, status: 'CONFIRMED' } : b));
@@ -107,66 +111,86 @@ export default function AdminRequests() {
                         const b = items.find(x => x.id === id);
                         if (!b) throw new Error('Booking not in current view; refresh and try again.');
 
-                        // 1) approve backend
-                        await approveBookingRequest(token, id, '');
+                        // 1) backend approve
+                        await approveBookingRequest(token, id, ''); // POST /bookings/admin/booking-requests/:id/approve
+                        // (this throws with the backend's message if not OK)
 
-                        // 2) Build slot note
-                        const who = (b.user?.name || b.user?.email || 'Student').trim();
-                        const line2 = (b.courseName && b.reason)
-                                ? `${b.courseName} — ${b.reason}`
-                                : (b.courseName || b.reason || '');
+                        // 2) write/merge the slot-note (your current code already does this)
                         const k = noteKeyParts(b.startTs, b.endTs);
-                        const newNote = { ...k, professor: who, course: line2, reason: b.reason || '' };
-
-                        // 3) Merge into notes
+                        const who = (b.user?.name || b.user?.email || 'Student').trim();
+                        const line2 = (b.courseName && b.reason) ? `${b.courseName} — ${b.reason}` : (b.courseName || b.reason || '');
                         const existing = await getRoomSlotNotes(token, b.roomId);
                         const filtered = existing.filter(n => !sameKey(n, k));
-                        filtered.push(newNote);
-                        await setRoomSlotNotes(token, b.roomId, filtered);
+                        filtered.push({ ...k, professor: who, course: line2, reason: b.reason || '' });
+                        await setRoomSlotNotes(token, b.roomId, filtered); // PUT /rooms/:id/slot-notes (array)
 
                         await load(true);
                 } catch (e) {
-                        alert(e.message || 'Approve failed');
+                        setToast(e.message || 'Approve failed');
+                        // revert optimistic change
                         setItems(prev => prev.map(b => b.id === id ? { ...b, status: 'PENDING' } : b));
+                } finally {
+                        setWorkingId(null);
                 }
         }
 
+        // ---------- Reject ----------
         async function onReject(id) {
                 try {
-                        setItems(prev => prev.map(b => b.id === id ? { ...b, status: 'REJECTED' } : b));
+                        setItems(prev => prev.map(b => (b.id === id ? { ...b, status: 'REJECTED' } : b)));
 
                         const b = items.find(x => x.id === id);
                         if (!b) throw new Error('Booking not in current view; refresh and try again.');
 
-                        // 1) reject backend
+                        // 1) Reject backend
                         await rejectBookingRequest(token, id, '');
 
-                        // 2) remove slot note
-                        const k = noteKeyParts(b.startTs, b.endTs);
+                        // 2) Remove the slot note so students see "Free"
+                        const key = noteKeyParts(b.startTs, b.endTs);
                         const existing = await getRoomSlotNotes(token, b.roomId);
-                        const filtered = existing.filter(n => !sameKey(n, k));
+                        const filtered = existing.filter(n => !sameKey(n, key));
                         await setRoomSlotNotes(token, b.roomId, filtered);
 
                         await load(true);
                 } catch (e) {
                         alert(e.message || 'Reject failed');
-                        setItems(prev => prev.map(b => b.id === id ? { ...b, status: 'PENDING' } : b));
+                        await load(true);
                 }
         }
 
+        async function onCancel(id) {
+                try {
+                        setItems(prev => prev.map(b => b.id === id ? { ...b, status: 'CANCELLED' } : b));
+                        const b = items.find(x => x.id === id);
+                        if (!b) throw new Error('Booking not in current view; refresh and try again.');
+
+                        // 1) cancel booking
+                        await cancelBooking(token, id);
+
+                        // 2) clear the matching slot note
+                        const { weekday, startHHMM, endHHMM } = noteKeyParts(b.startTs, b.endTs);
+                        await clearRoomSlotNote(token, b.roomId, { weekday, startHHMM, endHHMM });
+
+                        await load(true);
+                } catch (e) {
+                        alert(e.message || 'Cancel failed');
+                        setItems(prev => prev.map(b => b.id === id ? { ...b, status: 'CONFIRMED' } : b));
+                }
+        }
+
+        // Map to weekday/start/end using LOCAL time (matches student)
         function noteKeyParts(startTs, endTs) {
-                const s = new Date(startTs);  // LOCAL
+                const s = new Date(startTs);
                 const e = new Date(endTs);
-                const js = s.getDay();        // 0..6
-                const weekday = js === 0 ? 6 : js;
-                const toHHMM = d => d.toTimeString().slice(0, 5);
-                return { weekday, startHHMM: toHHMM(s), endHHMM: toHHMM(e) };
+                const js = s.getDay();                 // 0..6 (Sun..Sat) LOCAL
+                const weekday = js === 0 ? 6 : js;     // 1..6 Mon..Sat (map Sun->6)
+                const hhmm = (d) => d.toTimeString().slice(0, 5);
+                return { weekday, startHHMM: hhmm(s), endHHMM: hhmm(e) };
         }
         function sameKey(a, b) {
                 return a.weekday === b.weekday && a.startHHMM === b.startHHMM && a.endHHMM === b.endHHMM;
         }
 
-        // ---------------- UI ----------------
         return (
                 <div>
                         <div className="d-flex align-items-center justify-content-between flex-wrap gap-2">
@@ -197,7 +221,9 @@ export default function AdminRequests() {
 
                         <p className="text-secondary mt-2 mb-3">Review and act on student booking requests.</p>
 
+                        {toast && <div className="alert alert-warning">{toast}</div>}
                         {err && <div className="alert alert-danger">{err}</div>}
+
                         {loading ? (
                                 <div className="d-flex align-items-center gap-2">
                                         <div className="spinner-border spinner-border-sm" role="status" />
@@ -211,6 +237,14 @@ export default function AdminRequests() {
                         ) : (
                                 <div className="table-responsive">
                                         <table className="table table-hover align-middle">
+                                                <thead className="table-dark" style={{ position: 'sticky', top: 0, zIndex: 1 }}>
+                                                        <tr>
+                                                                {['Student', 'Room', 'Start', 'End', 'Reason', 'Status'].map((h) => (
+                                                                        <th key={h}>{h}</th>
+                                                                ))}
+                                                        </tr>
+                                                </thead>
+
                                                 <tbody>
                                                         {items.map((b) => (
                                                                 <tr key={b.id}>
@@ -221,19 +255,30 @@ export default function AdminRequests() {
                                                                                 </div>
                                                                                 {b.status === 'PENDING' && (
                                                                                         <div className="mt-2 d-flex flex-wrap gap-2">
-                                                                                                <button type="button" className="btn btn-sm btn-success" onClick={() => onApprove(b.id)}>
-                                                                                                        <i className="bi bi-check-lg me-1"></i>Approve
+                                                                                                <button
+                                                                                                        type="button"
+                                                                                                        className="btn btn-sm btn-success"
+                                                                                                        disabled={workingId === b.id}
+                                                                                                        onClick={() => onApprove(b.id)}
+                                                                                                >
+                                                                                                        {workingId === b.id ? 'Approving…' : (<><i className="bi bi-check-lg me-1"></i>Approve</>)}
                                                                                                 </button>
-                                                                                                <button type="button" className="btn btn-sm btn-outline-danger" onClick={() => onReject(b.id)}
+
+                                                                                                <button
+                                                                                                        type="button"
+                                                                                                        className="btn btn-sm btn-outline-danger"
+                                                                                                        onClick={() => onReject(b.id)}
                                                                                                         style={{
                                                                                                                 '--bs-btn-hover-bg': COLORS.accent,
                                                                                                                 '--bs-btn-hover-border-color': COLORS.accent,
-                                                                                                        }}>
+                                                                                                        }}
+                                                                                                >
                                                                                                         <i className="bi bi-x-lg me-1"></i>Reject
                                                                                                 </button>
                                                                                         </div>
                                                                                 )}
                                                                         </td>
+
                                                                         <td>{b.room?.name}</td>
                                                                         <td>{fmt(b.startTs)}</td>
                                                                         <td>{fmt(b.endTs)}</td>
@@ -253,6 +298,7 @@ export default function AdminRequests() {
                                                 </tbody>
                                         </table>
                                 </div>
+
                         )}
                 </div>
         );
