@@ -474,7 +474,7 @@ export default function RoomsStudent() {
                                                                                                         const title = available
                                                                                                                 ? 'Available (click to book)'
                                                                                                                 : note
-                                                                                                                        ? `${note.professor || 'In use'}${note.course ? '\n' + note.course : ''}${note.reason ? '\n' + note.reason : ''}`
+                                                                                                                        ? `${note.course ? note.course : 'In use'}${note.reason ? '\n' + note.reason : ''}`
                                                                                                                         : 'In use';
 
                                                                                                         return (
@@ -520,6 +520,7 @@ export default function RoomsStudent() {
                                                                                                                                                                 lineHeight: SLOT_LINE_HEIGHT,
                                                                                                                                                                 fontWeight: 600,
                                                                                                                                                                 textAlign: 'center',
+
                                                                                                                                                         }}
                                                                                                                                                 >
                                                                                                                                                         {note?.professor?.trim() || 'In use'}
@@ -530,6 +531,8 @@ export default function RoomsStudent() {
                                                                                                                                                                 fontSize: SLOT_TEXT_PX,
                                                                                                                                                                 lineHeight: SLOT_LINE_HEIGHT,
                                                                                                                                                                 textAlign: 'center',
+                                                                                                                                                                fontWeight: 600,
+
                                                                                                                                                         }}
                                                                                                                                                 >
                                                                                                                                                         {note?.course?.trim() || ''}

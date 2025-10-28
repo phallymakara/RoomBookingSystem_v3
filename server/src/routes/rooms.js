@@ -93,7 +93,7 @@ router.get('/:id/availability', async (req, res) => {
                 const existing = await prisma.booking.findMany({
                         where: {
                                 roomId,
-                                status: { in: ['CONFIRMED', 'PENDING'] },
+                                status: { in: ['CONFIRMED'] },
                                 OR: [
                                         { startTs: { gte: dayStart, lte: dayEnd } },
                                         { endTs: { gte: dayStart, lte: dayEnd } },
