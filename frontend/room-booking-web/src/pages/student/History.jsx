@@ -66,6 +66,8 @@ export default function History() {
                                                                 <th>Room</th>
                                                                 <th>Start</th>
                                                                 <th>End</th>
+                                                                <th>Course</th>
+                                                                <th>Reason</th>
                                                                 <th>Status</th>
                                                                 <th />
                                                         </tr>
@@ -74,6 +76,8 @@ export default function History() {
                                                         {items.map(b => (
                                                                 <tr key={b.id}>
                                                                         <td>{b.room?.name || '—'}</td>
+                                                                        <td>{b.courseName || '—'}</td>
+                                                                        <td>{b.reason || '—'}</td>
                                                                         <td>{fmtDate(b.startTs)}</td>
                                                                         <td>{fmtDate(b.endTs)}</td>
                                                                         <td><span className={`badge bg-${badge(b.status)}`}>{b.status}</span></td>

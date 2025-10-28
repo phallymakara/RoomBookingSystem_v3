@@ -359,6 +359,7 @@ router.get('/my/list', authGuard, async (req, res) => {
                 orderBy: [{ startTs: 'asc' }],
                 select: {
                         id: true, startTs: true, endTs: true, status: true,
+                        reason: true, studentId: true, courseName: true,
                         room: { select: { id: true, name: true /* add building if you have a relation here */ } }
                 }
         });
@@ -405,6 +406,7 @@ router.get('/admin/list', authGuard, requireAdmin, async (req, res) => {
                         take: pageSize,
                         select: {
                                 id: true, startTs: true, endTs: true, status: true,
+                                reason: true, studentId: true, courseName: true,
                                 user: { select: { id: true, name: true, email: true } },
                                 room: { select: { id: true, name: true /*, building: true*/ } },
                         }

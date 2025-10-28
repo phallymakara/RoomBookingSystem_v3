@@ -244,7 +244,7 @@ export default function AdminRequests() {
                                         <table className="table table-hover align-middle">
                                                 <thead className="table-dark" style={{ position: 'sticky', top: 0, zIndex: 1 }}>
                                                         <tr>
-                                                                {['Student', 'Room', 'Start', 'End', 'Reason', 'Status'].map((h) => (
+                                                                {['Student', 'Room', 'Start', 'End', 'Course', 'Reason', 'Status'].map((h) => (
                                                                         <th key={h}>{h}</th>
                                                                 ))}
                                                         </tr>
@@ -287,6 +287,7 @@ export default function AdminRequests() {
                                                                         <td>{b.room?.name}</td>
                                                                         <td>{fmt(b.startTs)}</td>
                                                                         <td>{fmt(b.endTs)}</td>
+                                                                        <td>{b.courseName || '—'}</td>
                                                                         <td>{b.reason || '—'}</td>
                                                                         <td>
                                                                                 <span className={`badge ${b.status === 'PENDING'
