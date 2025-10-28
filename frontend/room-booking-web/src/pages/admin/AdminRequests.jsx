@@ -121,7 +121,12 @@ export default function AdminRequests() {
                         const line2 = (b.courseName && b.reason) ? `${b.courseName} — ${b.reason}` : (b.courseName || b.reason || '');
                         const existing = await getRoomSlotNotes(token, b.roomId);
                         const filtered = existing.filter(n => !sameKey(n, k));
-                        filtered.push({ ...k, professor: who, course: line2, reason: b.reason || '' });
+                        filtered.push({
+                                ...k,
+                                professor: who,
+                                course: b.courseName || '',
+                                reason: b.reason || ''
+                        });
                         await setRoomSlotNotes(token, b.roomId, filtered); // PUT /rooms/:id/slot-notes (array)
 
                         await load(true);
@@ -285,10 +290,10 @@ export default function AdminRequests() {
                                                                         <td>{b.reason || '—'}</td>
                                                                         <td>
                                                                                 <span className={`badge ${b.status === 'PENDING'
-                                                                                                ? 'bg-warning text-dark'
-                                                                                                : b.status === 'CONFIRMED'
-                                                                                                        ? 'bg-success'
-                                                                                                        : 'bg-danger'
+                                                                                        ? 'bg-warning text-dark'
+                                                                                        : b.status === 'CONFIRMED'
+                                                                                                ? 'bg-success'
+                                                                                                : 'bg-danger'
                                                                                         }`}>
                                                                                         {label(b.status)}
                                                                                 </span>

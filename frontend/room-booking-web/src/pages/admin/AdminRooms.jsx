@@ -155,7 +155,8 @@ export default function AdminRooms() {
                                                 notesMap[rId][n.weekday] = notesMap[rId][n.weekday] || {};
                                                 notesMap[rId][n.weekday][slot.key] = {
                                                         professor: n.professor || '',
-                                                        course: n.course || ''
+                                                        course: n.course || '',
+                                                        reason: n.reason || ''
                                                 };
                                         }
                                 }
@@ -278,7 +279,13 @@ export default function AdminRooms() {
                 }
                 // default mode = green unless explicitly closed
                 const slotSet = closedSlots[roomId]?.[wday];
-                return !(slotSet && slotSet.has(slot.key));
+                const availableByHours = !(slotSet && slotSet.has(slot.key));
+                // NEW: any admin note means “in use”
+                const note = inUseText[roomId]?.[wday]?.[slot.key];
+                if (note && (note.professor?.trim() || note.course?.trim() || note.reason?.trim())) {
+                        return false;
+                }
+                return availableByHours;
         }
 
         function setSlotInfo(roomId, wday, slotKey, value /* {professor, course} | null */) {
@@ -344,7 +351,7 @@ export default function AdminRooms() {
 
         function handleClickSlot(roomId, wday, slot, available) {
                 if (available) {
-                        const existing = getSlotInfo(roomId, wday, slot.key) || { professor: '', course: '' };
+                        const existing = getSlotInfo(roomId, wday, slot.key) || { professor: '', course: '', reason: '' };
                         setEditing({
                                 roomId,
                                 wday,
@@ -352,6 +359,7 @@ export default function AdminRooms() {
                                 slot,
                                 professor: existing.professor,
                                 course: existing.course,
+                                reason: existing.reason,
                         });
                 } else {
                         const info = getSlotInfo(roomId, wday, slot.key);
@@ -365,11 +373,11 @@ export default function AdminRooms() {
 
         function saveEditing() {
                 if (!editing) return;
-                const { roomId, wday, slot, slotKey, professor, course } = editing;
+                const { roomId, wday, slot, slotKey, professor, course, reason } = editing;
 
                 // ----- Apply local UI update immediately -----
                 // 1) Set / update the in-use note
-                setSlotInfo(roomId, wday, slotKey, { professor, course });
+                setSlotInfo(roomId, wday, slotKey, { professor, course, reason });
 
                 // 2) Flip availability for that slot (explicit -> remove slot; default -> add closed)
                 if (isExplicit(roomId, wday)) {
@@ -417,6 +425,7 @@ export default function AdminRooms() {
                 dayMap[slotKey] = {
                         professor: professor?.trim() || '',
                         course: course?.trim() || '',
+                        reason: reason?.trim() || '',
                 };
                 nextInUse[roomId] = { ...nextInUse[roomId], [wday]: dayMap };
 
@@ -754,8 +763,9 @@ export default function AdminRooms() {
                                                                                                                 const info = getSlotInfo(r.id, weekday, s.key);
                                                                                                                 const profText = info?.professor?.trim() || 'In use';
                                                                                                                 const courseText = info?.course?.trim() || '';
-                                                                                                                const titleWhenInUse = courseText
-                                                                                                                        ? `${profText}\n${courseText}`
+                                                                                                                const reasonText = info?.reason?.trim() || '';
+                                                                                                                const titleWhenInUse = (courseText || reasonText)
+                                                                                                                        ? `${profText}${courseText ? '\n' + courseText : ''}${reasonText ? '\n' + reasonText : ''}`
                                                                                                                         : `${profText}\n(click to set Available)`;
                                                                                                                 return (
                                                                                                                         <td key={s.key} className="text-center" style={{ padding: '5px' }}>
@@ -813,7 +823,21 @@ export default function AdminRooms() {
                                                                                                                                                         >
                                                                                                                                                                 {courseText}
                                                                                                                                                         </span>
+                                                                                                                                                        {reasonText && (
+                                                                                                                                                                <span
+                                                                                                                                                                        style={{
+                                                                                                                                                                                ...lineEllipsis,
+                                                                                                                                                                                fontSize: SLOT_TEXT_PX,
+                                                                                                                                                                                lineHeight: SLOT_LINE_HEIGHT,
+                                                                                                                                                                                textAlign: 'center',
+                                                                                                                                                                        }}
+                                                                                                                                                                >
+                                                                                                                                                                        {reasonText}
+                                                                                                                                                                </span>
+                                                                                                                                                        )}
+
                                                                                                                                                 </span>
+
                                                                                                                                         )}
                                                                                                                                 </button>
                                                                                                                         </td>

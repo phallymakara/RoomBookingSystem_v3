@@ -185,7 +185,7 @@ export default function RoomsStudent() {
                                                 nMap[rid][n.weekday][slot.key] = {
                                                         professor: n.professor || '',
                                                         course: n.course || '',
-                                                        reason: n.reason || '',
+                                                        reason: n.reason || ''
                                                 };
                                         }
                                 }

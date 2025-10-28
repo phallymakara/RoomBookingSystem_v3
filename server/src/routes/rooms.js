@@ -338,7 +338,7 @@ router.post('/:roomId/slot-notes', requireAuth, requireRole('ADMIN'), async (req
                         endHHMM: n.endHHMM,
                         professor: (n.professor || '').trim(),
                         course: (n.course || '').trim(),
-                        reason
+                        reason: (n.reason || '').trim(),
                 };
 
                 // safe upsert without requiring a composite unique: delete exact then create

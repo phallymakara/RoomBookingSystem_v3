@@ -156,11 +156,11 @@ export async function addRoomClosure(token, roomId, { startDate, endDate, reason
 }
 
 // frontend/src/api.js
-export async function addRoomSlotNote(token, roomId, { weekday, startHHMM, endHHMM, professor, course }) {
+export async function addRoomSlotNote(token, roomId, { weekday, startHHMM, endHHMM, professor, course, reason }) {
         const res = await fetch(`${BASE}/rooms/${roomId}/slot-notes`, {
                 method: 'POST',
                 headers: auth(token),
-                body: JSON.stringify({ weekday, startHHMM, endHHMM, professor, course })
+                body: JSON.stringify({ weekday, startHHMM, endHHMM, professor, course, reason })
         });
         return handle(res); // { ok: true }
 }
