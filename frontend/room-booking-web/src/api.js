@@ -49,7 +49,7 @@ export async function getAvailability(
         { date, duration = 60, step = 30, openStart = '08:00', openEnd = '22:00' }
 ) {
         const qs = new URLSearchParams({ date, duration, step, openStart, openEnd });
-        const res = await fetch(`${BASE}/rooms/${roomId}/availability?${qs.toString()}`);
+        const res = await fetch(`${BASE}/rooms/${roomId}/availability?${qs.toString()}`, { cache: 'no-store' });
         return handle(res);
 }
 
@@ -142,7 +142,7 @@ export async function setRoomOpenHours(token, roomId, hours /* [{weekday,startHH
 export async function getRoomOpenHours(tokenOrRoomId, maybeRoomId) {
         const roomId = maybeRoomId || tokenOrRoomId;
         const headers = maybeRoomId ? { Authorization: `Bearer ${tokenOrRoomId}` } : undefined;
-        const res = await fetch(`${BASE}/rooms/${roomId}/open-hours`, { headers });
+        const res = await fetch(`${BASE}/rooms/${roomId}/open-hours`, { headers, cache: 'no-store' });
         return handle(res);
 }
 
@@ -279,6 +279,7 @@ export async function deleteRoom(token, roomId) {
 export async function getRoomSlotNotes(token, roomId) {
         const res = await fetch(`${BASE}/rooms/${roomId}/slot-notes`, {
                 headers: auth(token),
+                cache: 'no-store'
         });
         return handle(res); // returns an array
 }

@@ -116,7 +116,7 @@ router.get('/:id/availability', async (req, res) => {
                         const conflict = existing.some(b => overlaps(s, e, b.startTs, b.endTs));
                         if (!conflict) slots.push({ startTs: s.toISOString(), endTs: e.toISOString() });
                 }
-
+                res.set('Cache-Control', 'no-store');
                 res.json({ roomId, date, duration, step, openStart, openEnd, slots });
         } catch (e) {
                 res.status(400).json({ error: e?.errors?.[0]?.message || 'Bad request' });
@@ -262,6 +262,7 @@ router.get('/:roomId/slot-notes', requireAuth, async (req, res) => {
                         where: { roomId },
                         orderBy: [{ weekday: 'asc' }, { startHHMM: 'asc' }],
                 });
+                res.set('Cache-Control', 'no-store');
                 res.json(notes);
         } catch (e) {
                 res.status(500).json({ error: 'Failed to load slot notes' });
@@ -405,6 +406,7 @@ router.get('/:roomId/open-hours', async (req, res) => {
                         orderBy: [{ weekday: 'asc' }, { startHHMM: 'asc' }],
                         select: { weekday: true, startHHMM: true, endHHMM: true },
                 });
+                res.set('Cache-Control', 'no-store');
                 res.json(rows);
         } catch (e) {
                 res.status(500).json({ error: 'Failed to load open hours' });
