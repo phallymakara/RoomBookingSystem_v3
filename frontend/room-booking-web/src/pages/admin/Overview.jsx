@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { getAdminStats, getStatsSeries, getRoomUtilization, getBuildingShare } from '../../api';
-import { Chart } from 'chart.js/auto';
+import Chart from 'chart.js/auto';
 
 export default function Overview() {
         const token = localStorage.getItem('token') || '';
@@ -15,9 +15,9 @@ export default function Overview() {
         const [loading, setLoading] = useState(true);
 
         // chart state
-        const [series, setSeries] = useState([]);           // [{date,CONFIRMED,REJECTED,CANCELLED,PENDING}]
-        const [roomUsage, setRoomUsage] = useState([]);     // [{roomName,hours}]
-        const [buildingShare, setBuildingShare] = useState([]); // [{buildingName,count}]
+        const [series, setSeries] = useState([]);
+        const [roomUsage, setRoomUsage] = useState([]);
+        const [buildingShare, setBuildingShare] = useState([]);
         const lineRef = useRef(null);
         const barRef = useRef(null);
         const pieRef = useRef(null);
@@ -62,11 +62,9 @@ export default function Overview() {
 
         // draw charts after data
         useEffect(() => {
-                // clean up previous
                 try { lineChart.current?.destroy(); } catch { }
                 try { barChart.current?.destroy(); } catch { }
                 try { pieChart.current?.destroy(); } catch { }
-                // Line: Bookings over time
                 if (lineRef.current && series.length) {
                         const labels = series.map(d => d.date.slice(5)); // MM-DD
                         lineChart.current = new Chart(lineRef.current, {
@@ -83,28 +81,19 @@ export default function Overview() {
                                 options: { responsive: true, maintainAspectRatio: false }
                         });
                 }
-                // Bar: Room utilization (hours) — horizontal
                 if (barRef.current && roomUsage.length) {
                         const labels = roomUsage.map(r => r.roomName);
                         const data = roomUsage.map(r => Math.round(r.hours * 10) / 10);
                         barChart.current = new Chart(barRef.current, {
                                 type: 'bar',
                                 data: { labels, datasets: [{ label: 'Booked hours (30d)', data }] },
-                                options: {
-                                        indexAxis: 'y',
-                                        responsive: true, maintainAspectRatio: false,
-                                        scales: { x: { beginAtZero: true } }
-                                }
+                                options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, scales: { x: { beginAtZero: true } } }
                         });
                 }
-                // Pie/Donut: Building share
                 if (pieRef.current && buildingShare.length) {
                         pieChart.current = new Chart(pieRef.current, {
                                 type: 'doughnut',
-                                data: {
-                                        labels: buildingShare.map(b => b.buildingName),
-                                        datasets: [{ data: buildingShare.map(b => b.count) }]
-                                },
+                                data: { labels: buildingShare.map(b => b.buildingName), datasets: [{ data: buildingShare.map(b => b.count) }] },
                                 options: { responsive: true, maintainAspectRatio: false }
                         });
                 }
@@ -149,13 +138,30 @@ export default function Overview() {
                         <div className="card shadow-sm border-0 mt-3">
                                 <div className="card-body">
                                         <div className="text-secondary small mb-2">Bookings over time (last 30 days)</div>
-                                        <div style={{ height: 280 }}>
-                                                <canvas ref={lineRef} />
-                                        </div>
+                                        <div style={{ height: 280 }}><canvas ref={lineRef} /></div>
                                 </div>
                         </div>
 
                         {/* ---------------- Visualisation Section ---------------- */}
+
+                        <div className="row g-3 mt-1">
+                                <div className="col-12 col-md-6">
+                                        <div className="card shadow-sm border-0 h-100">
+                                                <div className="card-body">
+                                                        <div className="text-secondary small mb-2">Room utilization (booked hours, last 30 days)</div>
+                                                        <div style={{ height: 260 }}><canvas ref={barRef} /></div>
+                                                </div>
+                                        </div>
+                                </div>
+                                <div className="col-12 col-md-6">
+                                        <div className="card shadow-sm border-0 h-100">
+                                                <div className="card-body">
+                                                        <div className="text-secondary small mb-2">Bookings by building (last 30 days)</div>
+                                                        <div style={{ height: 260 }}><canvas ref={pieRef} /></div>
+                                                </div>
+                                        </div>
+                                </div>
+                        </div>
                         <h2 className="h4 mb-3 mt-4">Visualisation</h2>
 
                         <div className="card shadow-sm border-0">

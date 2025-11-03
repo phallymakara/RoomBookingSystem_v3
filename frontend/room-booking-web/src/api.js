@@ -345,6 +345,7 @@ export async function getBuildingShare(token, { days = 30 } = {}) {
         return handle(res); // [{buildingId,buildingName,count}]
 }
 
+
 export async function getBookingHistory(
         token,
         { statuses = [], page = 1, pageSize = 20, q = '', sort = 'createdAt', order = 'desc' } = {}

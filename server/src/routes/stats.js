@@ -55,7 +55,7 @@ router.get('/', async (req, res) => {
         }
 });
 
-// Helper: date range (UTC) for last N days
+// ---- helpers ----
 function getPastDaysRange(days = 30) {
         const end = new Date();
         const start = new Date();
@@ -67,16 +67,20 @@ function getPastDaysRange(days = 30) {
 function ymd(d) { return d.toISOString().slice(0, 10); }
 
 // GET /stats/series?days=30
-// Returns daily counts by status over the last N days
+// Daily counts by status over the last N days (by createdAt)
 router.get('/series', async (req, res) => {
         try {
                 const days = Math.min(Math.max(parseInt(req.query.days || '30', 10), 1), 120);
                 const { start, end } = getPastDaysRange(days);
+
                 const rows = await prisma.booking.findMany({
                         where: { createdAt: { gte: start, lte: end } },
-                        select: { createdAt: true, status: true },
+                        select: {
+                                id: true,
+                                room: { select: { floor: { select: { building: { select: { id: true, name: true } } } } } }
+                        },
                 });
-                // build empty series
+
                 const map = {};
                 for (let i = 0; i < days; i++) {
                         const d = new Date(start.getTime());
@@ -84,12 +88,9 @@ router.get('/series', async (req, res) => {
                         map[ymd(d)] = { date: ymd(d), CONFIRMED: 0, REJECTED: 0, CANCELLED: 0, PENDING: 0 };
                 }
                 for (const r of rows) {
-                        const k = ymd(new Date(Date.UTC(
-                                r.createdAt.getUTCFullYear(),
-                                r.createdAt.getUTCMonth(),
-                                r.createdAt.getUTCDate()
-                        )));
-                        if (map[k] && map[k][r.status] !== undefined) map[k][r.status] += 1;
+                        const d = r.createdAt;
+                        const key = ymd(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())));
+                        if (map[key] && map[key][r.status] !== undefined) map[key][r.status] += 1;
                 }
                 res.json(Object.values(map));
         } catch (e) {
@@ -98,7 +99,7 @@ router.get('/series', async (req, res) => {
 });
 
 // GET /stats/room-utilization?days=30
-// Returns total booked HOURS per room (CONFIRMED only) for last N days
+// Total booked HOURS per room (CONFIRMED) within range
 router.get('/room-utilization', async (req, res) => {
         try {
                 const days = Math.min(Math.max(parseInt(req.query.days || '30', 10), 1), 120);
@@ -110,40 +111,39 @@ router.get('/room-utilization', async (req, res) => {
                 const agg = {};
                 for (const r of rows) {
                         const hours = Math.max(0, (r.endTs - r.startTs) / 36e5);
-                        const key = r.roomId;
-                        if (!agg[key]) agg[key] = { roomId: key, roomName: r.room?.name || `Room ${key}`, hours: 0 };
-                        agg[key].hours += hours;
+                        if (!agg[r.roomId]) agg[r.roomId] = { roomId: r.roomId, roomName: r.room?.name || '—', hours: 0 };
+                        agg[r.roomId].hours += hours;
                 }
-                const list = Object.values(agg).sort((a, b) => b.hours - a.hours).slice(0, 12); // top 12
-                res.json(list);
+                res.json(Object.values(agg).sort((a, b) => b.hours - a.hours).slice(0, 12));
         } catch (e) {
                 res.status(500).json({ error: 'Failed to load room utilization', detail: String(e?.message || e) });
         }
 });
 
 // GET /stats/building-share?days=30
-// Returns booking counts per building for last N days
+// Booking counts grouped by building (by createdAt)
 router.get('/building-share', async (req, res) => {
         try {
                 const days = Math.min(Math.max(parseInt(req.query.days || '30', 10), 1), 120);
                 const { start, end } = getPastDaysRange(days);
                 const rows = await prisma.booking.findMany({
                         where: { createdAt: { gte: start, lte: end } },
-                        select: { id: true, room: { select: { building: { select: { id: true, name: true } } } } },
+                        select: { room: { select: { building: { select: { id: true, name: true } } } } },
                 });
                 const agg = {};
                 for (const r of rows) {
-                        const b = r.room?.building;
-                        const key = b?.id ?? 'unknown';
+                        const b = r.room?.floor?.building;
+                        const id = b?.id ?? 'unknown';
                         const name = b?.name ?? 'Unassigned';
-                        if (!agg[key]) agg[key] = { buildingId: key, buildingName: name, count: 0 };
-                        agg[key].count += 1;
+                        if (!agg[id]) agg[id] = { buildingId: id, buildingName: name, count: 0 };
+                        agg[id].count += 1;
                 }
                 res.json(Object.values(agg).sort((a, b) => b.count - a.count));
         } catch (e) {
                 res.status(500).json({ error: 'Failed to load building share', detail: String(e?.message || e) });
         }
 });
+
 
 
 
