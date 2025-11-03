@@ -68,33 +68,35 @@ function ymd(d) { return d.toISOString().slice(0, 10); }
 
 // GET /stats/series?days=30
 // Daily counts by status over the last N days (by createdAt)
+// GET /stats/series?days=30
 router.get('/series', async (req, res) => {
         try {
                 const days = Math.min(Math.max(parseInt(req.query.days || '30', 10), 1), 120);
                 const { start, end } = getPastDaysRange(days);
 
+                // ✅ only fields we actually use
                 const rows = await prisma.booking.findMany({
                         where: { createdAt: { gte: start, lte: end } },
-                        select: {
-                                id: true,
-                                room: { select: { floor: { select: { building: { select: { id: true, name: true } } } } } }
-                        },
+                        select: { createdAt: true, status: true },
                 });
 
                 const map = {};
                 for (let i = 0; i < days; i++) {
                         const d = new Date(start.getTime());
                         d.setUTCDate(start.getUTCDate() + i);
-                        map[ymd(d)] = { date: ymd(d), CONFIRMED: 0, REJECTED: 0, CANCELLED: 0, PENDING: 0 };
+                        const ymd = d.toISOString().slice(0, 10);
+                        map[ymd] = { date: ymd, CONFIRMED: 0, REJECTED: 0, CANCELLED: 0, PENDING: 0 };
                 }
                 for (const r of rows) {
                         const d = r.createdAt;
-                        const key = ymd(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())));
-                        if (map[key] && map[key][r.status] !== undefined) map[key][r.status] += 1;
+                        const ymd = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
+                                .toISOString().slice(0, 10);
+                        if (map[ymd]) map[ymd][r.status] += 1;
                 }
                 res.json(Object.values(map));
         } catch (e) {
-                res.status(500).json({ error: 'Failed to load series', detail: String(e?.message || e) });
+                console.error('[stats/series]', e);
+                res.status(500).json({ error: 'Failed to load series' });
         }
 });
 
@@ -122,14 +124,20 @@ router.get('/room-utilization', async (req, res) => {
 
 // GET /stats/building-share?days=30
 // Booking counts grouped by building (by createdAt)
+// GET /stats/building-share?days=30
 router.get('/building-share', async (req, res) => {
         try {
                 const days = Math.min(Math.max(parseInt(req.query.days || '30', 10), 1), 120);
                 const { start, end } = getPastDaysRange(days);
+
+                // ✅ room → floor → building
                 const rows = await prisma.booking.findMany({
                         where: { createdAt: { gte: start, lte: end } },
-                        select: { room: { select: { building: { select: { id: true, name: true } } } } },
+                        select: {
+                                room: { select: { floor: { select: { building: { select: { id: true, name: true } } } } } }
+                        },
                 });
+
                 const agg = {};
                 for (const r of rows) {
                         const b = r.room?.floor?.building;
@@ -140,7 +148,8 @@ router.get('/building-share', async (req, res) => {
                 }
                 res.json(Object.values(agg).sort((a, b) => b.count - a.count));
         } catch (e) {
-                res.status(500).json({ error: 'Failed to load building share', detail: String(e?.message || e) });
+                console.error('[stats/building-share]', e);
+                res.status(500).json({ error: 'Failed to load building share' });
         }
 });
 
