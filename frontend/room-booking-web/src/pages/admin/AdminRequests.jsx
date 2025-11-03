@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import {
         listBookingRequests,
         approveBookingRequest,
@@ -15,6 +16,13 @@ const POLL_MS = 5000;
 
 export default function AdminRequests() {
         const token = localStorage.getItem('token') || '';
+        const location = useLocation();
+        const [unread, setUnread] = useState(
+                () => Number(localStorage.getItem('admin_unread') || '0')
+        );
+
+
+
 
         // ✅ all hooks live INSIDE the component
         const [workingId, setWorkingId] = useState(null);
@@ -27,6 +35,28 @@ export default function AdminRequests() {
 
         const prevPendingIdsRef = useRef(new Set());
         const audioRef = useRef(null);
+
+        useEffect(() => {
+                if (location.pathname.startsWith('/admin/requests')) {
+                        localStorage.setItem('admin_unread', '0'); // reset shared count
+                        window.dispatchEvent(new Event('admin_unread_updated')); // notify other components
+                }
+        }, [location.pathname]);
+
+        useEffect(() => {
+                // Listen for manual reset event or cross-tab updates
+                const handleUpdate = () => {
+                        setUnread(Number(localStorage.getItem('admin_unread') || '0'));
+                };
+
+                window.addEventListener('admin_unread_updated', handleUpdate);
+                window.addEventListener('storage', handleUpdate);
+
+                return () => {
+                        window.removeEventListener('admin_unread_updated', handleUpdate);
+                        window.removeEventListener('storage', handleUpdate);
+                };
+        }, []);
 
         useEffect(() => {
                 if ('Notification' in window && Notification.permission === 'default') {
@@ -198,8 +228,10 @@ export default function AdminRequests() {
 
         return (
                 <div>
-                        <div className="d-flex align-items-center justify-content-between flex-wrap gap-2">
-                                <h2 className="h4 mb-0">Requests</h2>
+                        <div
+                                className="d-flex align-items-center justify-content-between flex-wrap gap-2"
+                                style={{ marginTop: '15px', marginLeft: '15px', marginBottom: '15px' }}
+                        >
                                 <div className="d-flex align-items-center gap-2">
                                         <div className="btn-group" role="group">
                                                 <button
@@ -223,8 +255,6 @@ export default function AdminRequests() {
                                         </button>
                                 </div>
                         </div>
-
-                        <p className="text-secondary mt-2 mb-3">Review and act on student booking requests.</p>
 
                         {toast && <div className="alert alert-warning">{toast}</div>}
                         {err && <div className="alert alert-danger">{err}</div>}

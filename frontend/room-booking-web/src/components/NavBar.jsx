@@ -1,6 +1,26 @@
 import { Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { openAdminEvents } from '../api';
 
 export default function NavBar({ authed, user, onLogout }) {
+        const [unread, setUnread] = useState(0);
+        useEffect(() => {
+                if (user?.role !== 'ADMIN') return;
+                const token = localStorage.getItem('token') || '';
+                if (!token) return;
+                const es = openAdminEvents(token);
+                es.onmessage = (ev) => {
+                        try {
+                                const msg = JSON.parse(ev.data);
+                                if (msg?.type === 'BOOKING_REQUEST_CREATED') setUnread(u => u + 1);
+                        } catch { }
+                };
+                return () => es.close();
+        }, [user]);
+        // optional: clear when viewing requests
+        useEffect(() => {
+                if (window.location.pathname.startsWith('/admin/requests')) setUnread(0);
+        }, [window.location.pathname]);
         return (
                 <nav className="navbar navbar-expand-lg bg-white border-bottom sticky-top">
                         <div className="container">
@@ -31,12 +51,29 @@ export default function NavBar({ authed, user, onLogout }) {
                                                                 {user?.role === 'ADMIN' && (
                                                                         <Link
                                                                                 to="/admin/requests"
-                                                                                className="btn btn-sm btn-light d-inline-flex align-items-center justify-content-center rounded-circle"
+                                                                                className="btn btn-sm btn-light position-relative d-inline-flex align-items-center justify-content-center rounded-circle"
                                                                                 aria-label="Notifications"
                                                                                 title="Notifications"
                                                                                 style={{ width: 36, height: 36 }}
                                                                         >
                                                                                 <i className="bi bi-bell"></i>
+                                                                                {unread > 0 && (
+                                                                                        <span
+                                                                                                className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+                                                                                                style={{
+                                                                                                        fontSize: '10px',
+                                                                                                        lineHeight: '12px',
+                                                                                                        minWidth: '16px',
+                                                                                                        height: '16px',
+                                                                                                        display: 'inline-flex',
+                                                                                                        alignItems: 'center',
+                                                                                                        justifyContent: 'center',
+                                                                                                        padding: 0,
+                                                                                                }}
+                                                                                        >
+                                                                                                {unread > 99 ? '99+' : unread}
+                                                                                        </span>
+                                                                                )}
                                                                         </Link>
                                                                 )}
 

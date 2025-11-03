@@ -114,17 +114,20 @@ router.post('/booking-requests', authGuard, async (req, res) => {
                 include: { room: true, user: true },
         });
 
-        // Notify admins (best-effort)
+        // After creating a booking request:
         try {
                 await emitAdmin({
                         type: 'BOOKING_REQUEST_CREATED',
                         payload: {
                                 id: booking.id,
                                 roomId: booking.roomId,
-                                roomName: booking.room?.name ?? 'Unknown Room',
-                                userName: booking.user?.name ?? 'Unknown User',
                                 startTs: booking.startTs,
                                 endTs: booking.endTs,
+                                roomName: booking.room?.name ?? '',
+                                userName: booking.user?.name ?? '',
+                                studentId: booking.studentId ?? '',
+                                courseName: booking.courseName ?? '',
+                                reason: booking.reason ?? ''
                         }
                 });
         } catch (error) {
@@ -221,16 +224,18 @@ router.post('/admin/booking-requests/:id/approve', authGuard, requireAdmin, asyn
                 return b;
         });
 
-        // notify (best-effort)
+        // When an admin accepts/rejects:
         try {
                 await emitAdmin({
                         type: 'BOOKING_REQUEST_DECIDED',
                         payload: {
-                                id: updated.id,
-                                status: updated.status, // 'CONFIRMED'
-                                roomId: updated.roomId,
-                                startTs: updated.startTs,
-                                endTs: updated.endTs,
+                                id: booking.id,
+                                status: booking.status,
+                                roomName: booking.room?.name ?? '',
+                                userName: booking.user?.name ?? '',
+                                studentId: booking.studentId ?? '',
+                                courseName: booking.courseName ?? '',
+                                reason: booking.reason ?? ''
                         }
                 });
         } catch (error) {

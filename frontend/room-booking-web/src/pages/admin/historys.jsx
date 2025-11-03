@@ -189,6 +189,8 @@ export default function History() {
                                                                 <SortHeader field="endTs" active={sort} order={order} onClick={headerSort}>End</SortHeader>
                                                                 <th>Room</th>
                                                                 <th>Building</th>
+                                                                <th>Course</th>
+                                                                <th>Reason</th>
                                                                 <SortHeader field="status" active={sort} order={order} onClick={headerSort}>Status</SortHeader>
                                                                 <th>Cancel reason</th>
                                                                 <th>User</th>
@@ -207,6 +209,8 @@ export default function History() {
                                                                                 <td>{row.endTs ? new Date(row.endTs).toLocaleString() : '—'}</td>
                                                                                 <td>{row.room?.name || '—'}</td>
                                                                                 <td>{row.building?.name || '—'}</td>
+                                                                                <td>{row.courseName || '—'}</td>
+                                                                                <td>{row.reason || '—'}</td>
                                                                                 <td><span className={STATUS_BADGE_CLASS(row.status)}>{STATUS_LABELS[row.status] || row.status}</span></td>
                                                                                 <td>{row.cancelReason || '—'}</td>
                                                                                 <td>

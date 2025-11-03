@@ -328,6 +328,23 @@ export async function getAdminStats(token, { tzOffsetMinutes } = {}) {
         return handle(res);
 }
 
+// Charts
+export async function getStatsSeries(token, { days = 30 } = {}) {
+        const qs = new URLSearchParams({ days: String(days) });
+        const res = await fetch(`${BASE}/stats/series?${qs}`, { headers: { Authorization: `Bearer ${token}` } });
+        return handle(res); // [{date,CONFIRMED,REJECTED,CANCELLED,PENDING}]
+}
+export async function getRoomUtilization(token, { days = 30 } = {}) {
+        const qs = new URLSearchParams({ days: String(days) });
+        const res = await fetch(`${BASE}/stats/room-utilization?${qs}`, { headers: { Authorization: `Bearer ${token}` } });
+        return handle(res); // [{roomId,roomName,hours}]
+}
+export async function getBuildingShare(token, { days = 30 } = {}) {
+        const qs = new URLSearchParams({ days: String(days) });
+        const res = await fetch(`${BASE}/stats/building-share?${qs}`, { headers: { Authorization: `Bearer ${token}` } });
+        return handle(res); // [{buildingId,buildingName,count}]
+}
+
 export async function getBookingHistory(
         token,
         { statuses = [], page = 1, pageSize = 20, q = '', sort = 'createdAt', order = 'desc' } = {}

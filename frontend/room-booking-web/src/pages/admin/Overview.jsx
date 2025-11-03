@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
-import { getAdminStats } from '../../api';
+import { useEffect, useRef, useState } from 'react';
+import { getAdminStats, getStatsSeries, getRoomUtilization, getBuildingShare } from '../../api';
+import { Chart } from 'chart.js/auto';
 
 export default function Overview() {
         const token = localStorage.getItem('token') || '';
@@ -13,6 +14,17 @@ export default function Overview() {
         const [err, setErr] = useState('');
         const [loading, setLoading] = useState(true);
 
+        // chart state
+        const [series, setSeries] = useState([]);           // [{date,CONFIRMED,REJECTED,CANCELLED,PENDING}]
+        const [roomUsage, setRoomUsage] = useState([]);     // [{roomName,hours}]
+        const [buildingShare, setBuildingShare] = useState([]); // [{buildingName,count}]
+        const lineRef = useRef(null);
+        const barRef = useRef(null);
+        const pieRef = useRef(null);
+        const lineChart = useRef(null);
+        const barChart = useRef(null);
+        const pieChart = useRef(null);
+
         useEffect(() => {
                 let alive = true;
 
@@ -23,8 +35,21 @@ export default function Overview() {
                                 // Asia/Phnom_Penh is UTC+7 => 420 minutes
                                 const data = await getAdminStats(token, { tzOffsetMinutes: 420 });
                                 if (alive && data) setStats(prev => ({ ...prev, ...data }));
+                                const [tiles, s, ru, bs] = await Promise.all([
+                                        getAdminStats(token, { tzOffsetMinutes: 420 }),
+                                        getStatsSeries(token, { days: 30 }),
+                                        getRoomUtilization(token, { days: 30 }),
+                                        getBuildingShare(token, { days: 30 }),
+                                ]);
+                                if (alive && tiles) setStats(prev => ({ ...prev, ...tiles }));
+                                if (alive) {
+                                        setSeries(s || []);
+                                        setRoomUsage(ru || []);
+                                        setBuildingShare(bs || []);
+                                }
                         } catch (e) {
                                 if (alive) setErr(e?.message || 'Failed to load stats');
+
                         } finally {
                                 if (alive) setLoading(false);
                         }
@@ -34,6 +59,62 @@ export default function Overview() {
                         alive = false;
                 };
         }, [token]);
+
+        // draw charts after data
+        useEffect(() => {
+                // clean up previous
+                try { lineChart.current?.destroy(); } catch { }
+                try { barChart.current?.destroy(); } catch { }
+                try { pieChart.current?.destroy(); } catch { }
+                // Line: Bookings over time
+                if (lineRef.current && series.length) {
+                        const labels = series.map(d => d.date.slice(5)); // MM-DD
+                        lineChart.current = new Chart(lineRef.current, {
+                                type: 'line',
+                                data: {
+                                        labels,
+                                        datasets: [
+                                                { label: 'Confirmed', data: series.map(d => d.CONFIRMED), tension: 0.3 },
+                                                { label: 'Rejected', data: series.map(d => d.REJECTED), tension: 0.3 },
+                                                { label: 'Cancelled', data: series.map(d => d.CANCELLED), tension: 0.3 },
+                                                { label: 'Pending', data: series.map(d => d.PENDING), tension: 0.3 },
+                                        ]
+                                },
+                                options: { responsive: true, maintainAspectRatio: false }
+                        });
+                }
+                // Bar: Room utilization (hours) — horizontal
+                if (barRef.current && roomUsage.length) {
+                        const labels = roomUsage.map(r => r.roomName);
+                        const data = roomUsage.map(r => Math.round(r.hours * 10) / 10);
+                        barChart.current = new Chart(barRef.current, {
+                                type: 'bar',
+                                data: { labels, datasets: [{ label: 'Booked hours (30d)', data }] },
+                                options: {
+                                        indexAxis: 'y',
+                                        responsive: true, maintainAspectRatio: false,
+                                        scales: { x: { beginAtZero: true } }
+                                }
+                        });
+                }
+                // Pie/Donut: Building share
+                if (pieRef.current && buildingShare.length) {
+                        pieChart.current = new Chart(pieRef.current, {
+                                type: 'doughnut',
+                                data: {
+                                        labels: buildingShare.map(b => b.buildingName),
+                                        datasets: [{ data: buildingShare.map(b => b.count) }]
+                                },
+                                options: { responsive: true, maintainAspectRatio: false }
+                        });
+                }
+                return () => {
+                        try { lineChart.current?.destroy(); } catch { }
+                        try { barChart.current?.destroy(); } catch { }
+                        try { pieChart.current?.destroy(); } catch { }
+                };
+        }, [series, roomUsage, buildingShare]);
+
 
         const Tile = ({ label, value }) => (
                 <div
@@ -56,7 +137,7 @@ export default function Overview() {
                         <h2 className="h4 mb-3">Overview</h2>
                         {err && <div className="alert alert-danger">{err}</div>}
 
-                        <div className="d-flex flex-wrap gap-3">
+                        <div className="d-flex flex-wrap gap-3" style={{ marginLeft: '20px', marginRight: '25px' }}>
                                 <Tile label="Total Buildings" value={stats.totalBuildings} />
                                 <Tile label="Total Rooms" value={stats.totalRooms} />
                                 <Tile label="Approved Today" value={stats.approvedToday} />
@@ -64,13 +145,12 @@ export default function Overview() {
                                 <Tile label="Rejected Today" value={stats.rejectedToday} />
                         </div>
 
+                        {/* Bookings over time (30d) */}
                         <div className="card shadow-sm border-0 mt-3">
                                 <div className="card-body">
-                                        <div className="text-secondary small mb-2">Recent activity</div>
-                                        <div className="list-group list-group-flush">
-                                                <div className="list-group-item">—</div>
-                                                <div className="list-group-item">—</div>
-                                                <div className="list-group-item">—</div>
+                                        <div className="text-secondary small mb-2">Bookings over time (last 30 days)</div>
+                                        <div style={{ height: 280 }}>
+                                                <canvas ref={lineRef} />
                                         </div>
                                 </div>
                         </div>
@@ -109,6 +189,30 @@ export default function Overview() {
                                                                 className="w-100 rounded-3 bg-body-secondary"
                                                                 style={{ height: 180, border: '1px dashed #ced4da' }}
                                                         />
+                                                </div>
+                                        </div>
+                                </div>
+                        </div>
+                        <div className="row g-3 mt-1">
+                                {/* Room utilization (30d) */}
+                                <div className="col-12 col-md-6">
+                                        <div className="card shadow-sm border-0 h-100">
+                                                <div className="card-body">
+                                                        <div className="text-secondary small mb-2">Room utilization (booked hours, last 30 days)</div>
+                                                        <div style={{ height: 260 }}>
+                                                                <canvas ref={barRef} />
+                                                        </div>
+                                                </div>
+                                        </div>
+                                </div>
+                                {/* Bookings by building (30d) */}
+                                <div className="col-12 col-md-6">
+                                        <div className="card shadow-sm border-0 h-100">
+                                                <div className="card-body">
+                                                        <div className="text-secondary small mb-2">Bookings by building (last 30 days)</div>
+                                                        <div style={{ height: 260 }}>
+                                                                <canvas ref={pieRef} />
+                                                        </div>
                                                 </div>
                                         </div>
                                 </div>

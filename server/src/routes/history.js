@@ -81,6 +81,10 @@ router.get('/', requireAuth, requireRole('ADMIN'), async (req, res) => {
                         building: b.room?.building ? { id: b.room.building.id, name: b.room.building.name } : null,
                         user: b.user ? { id: b.user.id, name: b.user.name, email: b.user.email } : null,
                         cancelReason: b.cancelReason ?? b.cancellationReason ?? null,
+                        courseName: b.courseName ?? null,
+                        reason: b.reason ?? null,
+                        studentId: b.studentId ?? null,
+
                 }));
 
                 res.json({

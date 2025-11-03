@@ -26,6 +26,7 @@ export default function AdminLayout() {
                 return () => es.close();
         }, []);
 
+
         return (
                 // Admin shell: fill viewport minus navbar, NO outer scroll
                 <div
