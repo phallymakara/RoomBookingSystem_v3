@@ -150,14 +150,20 @@ router.get('/room-utilization', async (req, res) => {
                         select: { roomId: true, startTs: true, endTs: true, room: { select: { name: true } } },
                 });
                 const agg = {};
+                const VALID = new Set(['CONFIRMED', 'REJECTED', 'CANCELLED', 'PENDING']);
                 for (const r of rows) {
-                        const hours = Math.max(0, (r.endTs - r.startTs) / 36e5);
-                        if (!agg[r.roomId]) agg[r.roomId] = { roomId: r.roomId, roomName: r.room?.name || '—', hours: 0 };
-                        agg[r.roomId].hours += hours;
+                        const d = r.createdAt;
+                        const key = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
+                                .toISOString().slice(0, 10);
+                        const bucket = map[key];
+                        if (!bucket) continue;
+                        const s = VALID.has(r.status) ? r.status : 'PENDING';
+                        bucket[s] += 1;
                 }
                 res.json(Object.values(agg).sort((a, b) => b.hours - a.hours).slice(0, 12));
         } catch (e) {
-                res.status(500).json({ error: 'Failed to load room utilization', detail: String(e?.message || e) });
+                console.error('[stats/series]', e?.message, e);
+                res.status(500).json({ error: 'Failed to load series', detail: String(e?.message || e) });
         }
 });
 
