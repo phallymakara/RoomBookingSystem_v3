@@ -1,3 +1,4 @@
+// frontend/src/pages/student/History.jsx
 import { useEffect, useMemo, useState } from 'react';
 import { getBookingHistory } from '../../api';
 
@@ -10,6 +11,8 @@ const STATUS_LABELS = {
         CANCELED: 'Cancelled',
         PENDING: 'Pending',
 };
+
+const ALL_STATUSES = ['ACCEPTED', 'APPROVED', 'CONFIRMED', 'REJECTED', 'CANCELLED', 'PENDING'];
 
 const STATUS_BADGE_CLASS = (s) => {
         switch (s) {
@@ -29,26 +32,36 @@ const STATUS_BADGE_CLASS = (s) => {
         }
 };
 
+function SortHeader({ field, active, order, onClick, children }) {
+        // active = current sort field; order = 'asc' | 'desc'
+        const isActive = active === field;
+        return (
+                <th style={{ cursor: 'pointer', whiteSpace: 'nowrap' }} onClick={() => onClick(field)}>
+                        {children}{' '}
+                        {isActive && (
+                                <span aria-hidden="true" style={{ opacity: 0.7 }}>
+                                        {order === 'asc' ? '▲' : '▼'}
+                                </span>
+                        )}
+                </th>
+        );
+}
+
 export default function History() {
         const token = localStorage.getItem('token') || '';
 
-        const [statuses, setStatuses] = useState([
-                'ACCEPTED',
-                'APPROVED',
-                'CONFIRMED',
-                'REJECTED',
-                'CANCELLED',
-        ]);
+        const [statuses, setStatuses] = useState(['ACCEPTED', 'APPROVED', 'CONFIRMED', 'REJECTED', 'CANCELLED', 'PENDING']);
         const [q, setQ] = useState('');
         const [page, setPage] = useState(1);
         const [pageSize] = useState(20);
-        const [sort, setSort] = useState('createdAt');
-        const [order, setOrder] = useState('desc');
+        const [sort, setSort] = useState('createdAt'); // 'createdAt' | 'startTs' | 'endTs' | 'status'
+        const [order, setOrder] = useState('desc'); // 'asc' | 'desc'
 
         const [data, setData] = useState({ total: 0, items: [] });
         const [loading, setLoading] = useState(true);
         const [err, setErr] = useState('');
 
+        // fetch
         useEffect(() => {
                 let alive = true;
                 (async () => {
@@ -70,17 +83,18 @@ export default function History() {
                                 if (alive) setLoading(false);
                         }
                 })();
-                return () => (alive = false);
+                return () => { alive = false; };
                 // eslint-disable-next-line react-hooks/exhaustive-deps
         }, [token, statuses.join(','), page, pageSize, q, sort, order]);
 
-        const totalPages = useMemo(() => Math.max(Math.ceil((data.total || 0) / pageSize), 1), [data.total, pageSize]);
+        const totalPages = useMemo(
+                () => Math.max(Math.ceil((data.total || 0) / pageSize), 1),
+                [data.total, pageSize]
+        );
 
         const toggleStatus = (s) => {
                 setPage(1);
-                setStatuses(prev =>
-                        prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]
-                );
+                setStatuses(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]);
         };
 
         const headerSort = (field) => {
@@ -90,7 +104,16 @@ export default function History() {
                         setSort(field);
                         setOrder('asc');
                 }
+                setPage(1);
         };
+
+        // Reset to all statuses
+        const selectAll = () => { setStatuses(ALL_STATUSES); setPage(1); };
+        const clearAll = () => { setStatuses([]); setPage(1); };
+
+        const rangeText = data.items.length
+                ? `${(page - 1) * pageSize + 1}–${(page - 1) * pageSize + data.items.length} of ${data.total}`
+                : `0–0 of ${data.total}`;
 
         return (
                 <>
@@ -109,9 +132,10 @@ export default function History() {
                                                                 onChange={(e) => { setPage(1); setQ(e.target.value); }}
                                                         />
                                                 </div>
+
                                                 <div className="col-12 col-md">
                                                         <div className="d-flex flex-wrap gap-2">
-                                                                {['ACCEPTED', 'APPROVED', 'CONFIRMED', 'REJECTED', 'CANCELLED'].map(s => (
+                                                                {ALL_STATUSES.map(s => (
                                                                         <button
                                                                                 key={s}
                                                                                 type="button"
@@ -121,8 +145,15 @@ export default function History() {
                                                                                 {STATUS_LABELS[s] || s}
                                                                         </button>
                                                                 ))}
+                                                                <button type="button" className="btn btn-sm btn-outline-secondary" onClick={selectAll}>
+                                                                        Select all
+                                                                </button>
+                                                                <button type="button" className="btn btn-sm btn-outline-secondary" onClick={clearAll}>
+                                                                        Clear
+                                                                </button>
                                                         </div>
                                                 </div>
+
                                                 <div className="col-12 col-md-auto ms-auto d-flex gap-2">
                                                         <select
                                                                 className="form-select form-select-sm"
@@ -153,12 +184,12 @@ export default function History() {
                                         <table className="table align-middle mb-0">
                                                 <thead className="table-light">
                                                         <tr>
-                                                                <th style={{ cursor: 'pointer' }} onClick={() => headerSort('createdAt')}>Created</th>
-                                                                <th style={{ cursor: 'pointer' }} onClick={() => headerSort('startTs')}>Start</th>
-                                                                <th style={{ cursor: 'pointer' }} onClick={() => headerSort('endTs')}>End</th>
+                                                                <SortHeader field="createdAt" active={sort} order={order} onClick={headerSort}>Created</SortHeader>
+                                                                <SortHeader field="startTs" active={sort} order={order} onClick={headerSort}>Start</SortHeader>
+                                                                <SortHeader field="endTs" active={sort} order={order} onClick={headerSort}>End</SortHeader>
                                                                 <th>Room</th>
                                                                 <th>Building</th>
-                                                                <th style={{ cursor: 'pointer' }} onClick={() => headerSort('status')}>Status</th>
+                                                                <SortHeader field="status" active={sort} order={order} onClick={headerSort}>Status</SortHeader>
                                                                 <th>Cancel reason</th>
                                                                 <th>User</th>
                                                         </tr>
@@ -171,7 +202,7 @@ export default function History() {
                                                         ) : (
                                                                 data.items.map(row => (
                                                                         <tr key={row.id}>
-                                                                                <td>{new Date(row.createdAt).toLocaleString()}</td>
+                                                                                <td>{row.createdAt ? new Date(row.createdAt).toLocaleString() : '—'}</td>
                                                                                 <td>{row.startTs ? new Date(row.startTs).toLocaleString() : '—'}</td>
                                                                                 <td>{row.endTs ? new Date(row.endTs).toLocaleString() : '—'}</td>
                                                                                 <td>{row.room?.name || '—'}</td>
@@ -192,16 +223,23 @@ export default function History() {
 
                                 {/* Pagination */}
                                 <div className="card-body d-flex justify-content-between align-items-center">
-                                        <div className="small text-secondary">
-                                                {(data.items.length ? (page - 1) * pageSize + 1 : 0)}–
-                                                {(data.items.length ? (page - 1) * pageSize + data.items.length : 0)}
-                                                {' of '}
-                                                {data.total}
-                                        </div>
+                                        <div className="small text-secondary">{rangeText}</div>
                                         <div className="btn-group">
-                                                <button className="btn btn-outline-secondary btn-sm" disabled={page <= 1} onClick={() => setPage(p => Math.max(p - 1, 1))}>Prev</button>
+                                                <button
+                                                        className="btn btn-outline-secondary btn-sm"
+                                                        disabled={page <= 1}
+                                                        onClick={() => setPage(p => Math.max(p - 1, 1))}
+                                                >
+                                                        Prev
+                                                </button>
                                                 <span className="btn btn-outline-secondary btn-sm disabled">{page} / {totalPages}</span>
-                                                <button className="btn btn-outline-secondary btn-sm" disabled={page >= totalPages} onClick={() => setPage(p => Math.min(p + 1, totalPages))}>Next</button>
+                                                <button
+                                                        className="btn btn-outline-secondary btn-sm"
+                                                        disabled={page >= totalPages}
+                                                        onClick={() => setPage(p => Math.min(p + 1, totalPages))}
+                                                >
+                                                        Next
+                                                </button>
                                         </div>
                                 </div>
                         </div>

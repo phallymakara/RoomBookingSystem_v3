@@ -11,7 +11,6 @@ import {
         setRoomSlotNotes,
 } from '../../api';
 
-
 const BRAND = '#272446';
 const IN_USE = '#bd1e30';
 
@@ -64,11 +63,12 @@ export default function AdminRooms() {
         // { [roomId]: { [weekday]: Set<slotKey> } }
         const [closedSlots, setClosedSlots] = useState({});
 
-        // In-use info: { [roomId]: { [weekday]: { [slotKey]: { professor, course } } } }
+        // In-use info: { [roomId]: { [weekday]: { [slotKey]: { professor, course, reason } } } }
         const [inUseText, setInUseText] = useState({});
 
-        // Inline editor state
+        // Inline editor state (NO reason field here; reason is student-only)
         const [editing, setEditing] = useState(null);
+        // editing = { roomId, wday, slotKey, slot, professor, course, reason? (kept read-only) }
 
         // Confirm cancel modal
         const [confirmCancel, setConfirmCancel] = useState(null);
@@ -135,7 +135,7 @@ export default function AdminRooms() {
                                 );
                                 setExplicitHours(Object.fromEntries(hourEntries));
 
-                                // SLOT NOTES
+                                // SLOT NOTES (include reason so we never wipe it)
                                 const noteEntries = await Promise.all(
                                         list.map(async (r) => {
                                                 const ns = await getRoomSlotNotes(token, r.id).catch(() => []);
@@ -143,7 +143,7 @@ export default function AdminRooms() {
                                         })
                                 );
 
-                                // Convert notes → inUseText shape
+                                // Convert notes → inUseText shape (KEEP reason)
                                 const notesMap = {};
                                 for (const [rId, arr] of noteEntries) {
                                         for (const n of arr) {
@@ -184,7 +184,7 @@ export default function AdminRooms() {
                 // eslint-disable-next-line react-hooks/exhaustive-deps
         }, [selFloorId]);
 
-        // Auto-refresh hours & notes every 1s so admin & student stay in sync
+        // Auto-refresh hours & notes every 5s so admin & student stay in sync
         useEffect(() => {
                 if (!selFloorId || rooms.length === 0) return;
 
@@ -200,10 +200,7 @@ export default function AdminRooms() {
                                 );
                                 if (!alive) return;
 
-                                setExplicitHours(prev => {
-                                        const next = Object.fromEntries(hourEntries);
-                                        return next;
-                                });
+                                setExplicitHours(Object.fromEntries(hourEntries));
 
                                 // recompute dayMode based on fresh hours
                                 setDayMode(prev => {
@@ -217,7 +214,7 @@ export default function AdminRooms() {
                                         return nm;
                                 });
 
-                                // refresh notes
+                                // refresh notes (KEEP reason)
                                 const noteEntries = await Promise.all(
                                         rooms.map(async (r) => {
                                                 const ns = await getRoomSlotNotes(token, r.id).catch(() => []);
@@ -226,7 +223,6 @@ export default function AdminRooms() {
                                 );
                                 if (!alive) return;
 
-                                // Convert to inUseText shape
                                 const notesMap = {};
                                 for (const [rId, arr] of noteEntries) {
                                         for (const n of arr) {
@@ -238,25 +234,22 @@ export default function AdminRooms() {
                                                 notesMap[rId][n.weekday] = notesMap[rId][n.weekday] || {};
                                                 notesMap[rId][n.weekday][slot.key] = {
                                                         professor: n.professor || '',
-                                                        course: n.course || ''
+                                                        course: n.course || '',
+                                                        reason: n.reason || ''
                                                 };
                                         }
                                 }
                                 setInUseText(notesMap);
-
-                                // do NOT touch closedSlots or editing here (those are local/transient)
                         } catch {
                                 // swallow; keep UI steady if a tick fails
                         }
                 };
 
-                // first tick quickly, then every 1s
                 tick();
                 const id = setInterval(tick, 5000);
                 return () => { alive = false; clearInterval(id); };
                 // eslint-disable-next-line react-hooks/exhaustive-deps
         }, [selFloorId, rooms, token]);
-
 
         const buildingName = useMemo(
                 () => buildings.find(b => b.id === selBuildingId)?.name || '',
@@ -280,7 +273,7 @@ export default function AdminRooms() {
                 // default mode = green unless explicitly closed
                 const slotSet = closedSlots[roomId]?.[wday];
                 const availableByHours = !(slotSet && slotSet.has(slot.key));
-                // NEW: any admin note means “in use”
+                // Any note means “in use”
                 const note = inUseText[roomId]?.[wday]?.[slot.key];
                 if (note && (note.professor?.trim() || note.course?.trim() || note.reason?.trim())) {
                         return false;
@@ -288,6 +281,7 @@ export default function AdminRooms() {
                 return availableByHours;
         }
 
+        // Admin can edit only professor & course; preserve reason if it exists.
         function setSlotInfo(roomId, wday, slotKey, value /* {professor, course} | null */) {
                 setInUseText(prev => {
                         const room = { ...(prev[roomId] || {}) };
@@ -295,9 +289,11 @@ export default function AdminRooms() {
                         if (!value || (!value.professor?.trim() && !value.course?.trim())) {
                                 delete day[slotKey];
                         } else {
+                                const prevReason = day[slotKey]?.reason || ''; // keep old reason (student-provided)
                                 day[slotKey] = {
                                         professor: value.professor?.trim() || '',
                                         course: value.course?.trim() || '',
+                                        reason: prevReason, // preserved
                                 };
                         }
                         if (Object.keys(day).length === 0) delete room[wday];
@@ -359,7 +355,7 @@ export default function AdminRooms() {
                                 slot,
                                 professor: existing.professor,
                                 course: existing.course,
-                                reason: existing.reason,
+                                reason: existing.reason, // read-only in UI, still carried so we can preserve it
                         });
                 } else {
                         const info = getSlotInfo(roomId, wday, slot.key);
@@ -376,8 +372,18 @@ export default function AdminRooms() {
                 const { roomId, wday, slot, slotKey, professor, course, reason } = editing;
 
                 // ----- Apply local UI update immediately -----
-                // 1) Set / update the in-use note
-                setSlotInfo(roomId, wday, slotKey, { professor, course, reason });
+                // 1) Set / update the in-use note (preserve reason)
+                setInUseText(prev => {
+                        const room = { ...(prev[roomId] || {}) };
+                        const day = { ...(room[wday] || {}) };
+                        day[slotKey] = {
+                                professor: professor?.trim() || '',
+                                course: course?.trim() || '',
+                                reason: (day[slotKey]?.reason ?? reason ?? '') || '', // keep existing reason if present
+                        };
+                        room[wday] = day;
+                        return { ...prev, [roomId]: room };
+                });
 
                 // 2) Flip availability for that slot (explicit -> remove slot; default -> add closed)
                 if (isExplicit(roomId, wday)) {
@@ -387,25 +393,18 @@ export default function AdminRooms() {
                 }
                 setEditing(null);
 
-                // ----- Build NEXT state synchronously (to persist exactly what we just applied) -----
-
-                // explicitHours
+                // Build a consistent draft to persist
                 const nextExplicit = {
                         ...explicitHours,
                         [roomId]: [...(explicitHours[roomId] || [])],
                 };
                 if (isExplicit(roomId, wday)) {
-                        // remove if exists
                         const idx = nextExplicit[roomId].findIndex(
-                                h =>
-                                        h.weekday === wday &&
-                                        h.startHHMM === slot.startHHMM &&
-                                        h.endHHMM === slot.endHHMM
+                                h => h.weekday === wday && h.startHHMM === slot.startHHMM && h.endHHMM === slot.endHHMM
                         );
                         if (idx >= 0) nextExplicit[roomId].splice(idx, 1);
                 }
 
-                // closedSlots
                 const nextClosed = {
                         ...closedSlots,
                         [roomId]: { ...(closedSlots[roomId] || {}) },
@@ -416,7 +415,6 @@ export default function AdminRooms() {
                         nextClosed[roomId][wday] = set;
                 }
 
-                // inUseText (ensure the note is present with latest values)
                 const nextInUse = {
                         ...inUseText,
                         [roomId]: { ...(inUseText[roomId] || {}) },
@@ -425,17 +423,14 @@ export default function AdminRooms() {
                 dayMap[slotKey] = {
                         professor: professor?.trim() || '',
                         course: course?.trim() || '',
-                        reason: reason?.trim() || '',
+                        reason: (dayMap[slotKey]?.reason ?? reason ?? '') || '',
                 };
                 nextInUse[roomId] = { ...nextInUse[roomId], [wday]: dayMap };
 
-                // ----- Commit local UI right away -----
                 setExplicitHours(nextExplicit);
                 setClosedSlots(nextClosed);
                 setInUseText(nextInUse);
 
-                // ----- Persist using the exact draft we just applied -----
-                // This triggers your existing savingRowId / savedRowId UI
                 saveRoomHours(roomId, {
                         explicitHours: nextExplicit,
                         closedSlots: nextClosed,
@@ -445,7 +440,6 @@ export default function AdminRooms() {
                         alert(e.message || 'Failed to save slot');
                 });
         }
-
 
         function confirmCancelNo() {
                 setConfirmCancel(null);
@@ -460,74 +454,65 @@ export default function AdminRooms() {
                 } else {
                         removeClosed(roomId, wday, slotKey);
                 }
-                setSlotInfo(roomId, wday, slotKey, null);
+
+                // Clear the note entirely (including reason)
+                setInUseText(prev => {
+                        const room = { ...(prev[roomId] || {}) };
+                        const day = { ...(room[wday] || {}) };
+                        delete day[slotKey];
+                        if (Object.keys(day).length === 0) delete room[wday];
+                        else room[wday] = day;
+                        return { ...prev, [roomId]: room };
+                });
 
                 setConfirmCancel(null);
 
-                // Persist immediately so student page sees it as FREE right away
+                // Build next state and persist
                 try {
-                        await saveRoomHours(roomId);
-
-                } catch (e) {
-                        // surface a gentle message, but we've already flipped local UI
-                        console.error(e);
-                        alert(e.message || 'Failed to save after cancel');
-                }
-
-                // ----- Build NEXT state synchronously -----
-                // explicitHours
-                const nextExplicit = {
-                        ...explicitHours,
-                        [roomId]: [...(explicitHours[roomId] || [])],
-                };
-                if (isExplicit(roomId, wday)) {
-                        const exists = nextExplicit[roomId].some(
-                                h => h.weekday === wday &&
-                                        h.startHHMM === slot.startHHMM &&
-                                        h.endHHMM === slot.endHHMM
-                        );
-                        if (!exists) {
-                                nextExplicit[roomId].push({ weekday: wday, startHHMM: slot.startHHMM, endHHMM: slot.endHHMM });
+                        const nextExplicit = {
+                                ...explicitHours,
+                                [roomId]: [...(explicitHours[roomId] || [])],
+                        };
+                        if (isExplicit(roomId, wday)) {
+                                const exists = nextExplicit[roomId].some(
+                                        h => h.weekday === wday && h.startHHMM === slot.startHHMM && h.endHHMM === slot.endHHMM
+                                );
+                                if (!exists) {
+                                        nextExplicit[roomId].push({ weekday: wday, startHHMM: slot.startHHMM, endHHMM: slot.endHHMM });
+                                }
                         }
-                }
 
-                // closedSlots
-                const nextClosed = {
-                        ...closedSlots,
-                        [roomId]: { ...(closedSlots[roomId] || {}) }
-                };
-                if (!isExplicit(roomId, wday)) {
-                        const set = new Set(nextClosed[roomId][wday] || []);
-                        set.delete(slotKey); // removing the "closed" marker makes it free in default mode
-                        if (set.size === 0) delete nextClosed[roomId][wday];
-                        else nextClosed[roomId][wday] = set;
-                }
-
-                // inUseText (clear the note)
-                const nextInUse = {
-                        ...inUseText,
-                        [roomId]: { ...(inUseText[roomId] || {}) }
-                };
-                if (nextInUse[roomId][wday]) {
-                        const dayMap = { ...nextInUse[roomId][wday] };
-                        delete dayMap[slotKey];
-                        if (Object.keys(dayMap).length === 0) {
-                                const copy = { ...nextInUse[roomId] };
-                                delete copy[wday];
-                                nextInUse[roomId] = copy;
-                        } else {
-                                nextInUse[roomId] = { ...nextInUse[roomId], [wday]: dayMap };
+                        const nextClosed = {
+                                ...closedSlots,
+                                [roomId]: { ...(closedSlots[roomId] || {}) }
+                        };
+                        if (!isExplicit(roomId, wday)) {
+                                const set = new Set(nextClosed[roomId][wday] || []);
+                                set.delete(slotKey);
+                                if (set.size === 0) delete nextClosed[roomId][wday];
+                                else nextClosed[roomId][wday] = set;
                         }
-                }
 
-                // ----- Commit local UI immediately -----
-                setExplicitHours(nextExplicit);
-                setClosedSlots(nextClosed);
-                setInUseText(nextInUse);
-                setConfirmCancel(null);
+                        const nextInUse = {
+                                ...inUseText,
+                                [roomId]: { ...(inUseText[roomId] || {}) }
+                        };
+                        if (nextInUse[roomId][wday]) {
+                                const dayMap = { ...nextInUse[roomId][wday] };
+                                delete dayMap[slotKey];
+                                if (Object.keys(dayMap).length === 0) {
+                                        const copy = { ...nextInUse[roomId] };
+                                        delete copy[wday];
+                                        nextInUse[roomId] = copy;
+                                } else {
+                                        nextInUse[roomId] = { ...nextInUse[roomId], [wday]: dayMap };
+                                }
+                        }
 
-                // ----- Persist using the exact draft we just applied -----
-                try {
+                        setExplicitHours(nextExplicit);
+                        setClosedSlots(nextClosed);
+                        setInUseText(nextInUse);
+
                         await saveRoomHours(roomId, {
                                 explicitHours: nextExplicit,
                                 closedSlots: nextClosed,
@@ -537,7 +522,6 @@ export default function AdminRooms() {
                         console.error(e);
                         alert(e.message || 'Failed to save after cancel');
                 }
-
         }
 
         async function saveRoomHours(roomId, draft = {}) {
@@ -559,13 +543,11 @@ export default function AdminRooms() {
 
                         for (let d = 1; d <= 6; d++) {
                                 if (dayMode[roomId]?.[d] === 'explicit') {
-                                        // If the day is explicit but has no slots left, add a sentinel to keep it explicit.
                                         const hasAny = base.some(h => h.weekday === d);
                                         if (!hasAny) {
                                                 out.push({ weekday: d, startHHMM: SENT_START, endHHMM: SENT_END });
                                         }
                                 } else {
-                                        // default mode: encode "closed" with either explicit allowed slots or a sentinel if all closed
                                         const closedSet = roomClosed[d];
                                         if (closedSet && closedSet.size > 0) {
                                                 if (closedSet.size === TIME_SLOTS.length) {
@@ -581,7 +563,7 @@ export default function AdminRooms() {
                                 }
                         }
 
-                        // Deduplicate just in case
+                        // Deduplicate
                         const uniq = [];
                         const seen = new Set();
                         for (const h of out) {
@@ -589,7 +571,7 @@ export default function AdminRooms() {
                                 if (!seen.has(k)) { seen.add(k); uniq.push(h); }
                         }
 
-                        // Build notes payload
+                        // Build notes payload (KEEP reason)
                         const notesOut = [];
                         const roomNotes = notesSrc[roomId] || {};
                         for (const [wdStr, slots] of Object.entries(roomNotes)) {
@@ -603,7 +585,7 @@ export default function AdminRooms() {
                                                 endHHMM: s.endHHMM,
                                                 professor: info.professor || '',
                                                 course: info.course || '',
-                                                reason: info.reason || ''
+                                                reason: info.reason || '', // preserved; admin UI doesn't edit this
                                         });
                                 }
                         }
@@ -633,7 +615,11 @@ export default function AdminRooms() {
                                         const slot = TIME_SLOTS.find(s => s.startHHMM === n.startHHMM && s.endHHMM === n.endHHMM);
                                         if (!slot) continue;
                                         roomMap[n.weekday] = roomMap[n.weekday] || {};
-                                        roomMap[n.weekday][slot.key] = { professor: n.professor || '', course: n.course || '' };
+                                        roomMap[n.weekday][slot.key] = {
+                                                professor: n.professor || '',
+                                                course: n.course || '',
+                                                reason: n.reason || '',
+                                        };
                                 }
                                 copy[roomId] = roomMap;
                                 return copy;
@@ -654,7 +640,6 @@ export default function AdminRooms() {
                         setSavingRowId(null);
                 }
         }
-
 
         const lineEllipsis = {
                 display: 'block',
@@ -835,9 +820,7 @@ export default function AdminRooms() {
                                                                                                                                                                         {reasonText}
                                                                                                                                                                 </span>
                                                                                                                                                         )}
-
                                                                                                                                                 </span>
-
                                                                                                                                         )}
                                                                                                                                 </button>
                                                                                                                         </td>
@@ -866,7 +849,7 @@ export default function AdminRooms() {
                                 </main>
                         </div>
 
-                        {/* ===== Inline 2-field editor ===== */}
+                        {/* ===== Inline editor (NO reason input) ===== */}
                         {editing && (
                                 <div
                                         className="position-fixed top-0 start-0 w-100 h-100"
@@ -904,6 +887,14 @@ export default function AdminRooms() {
                                                                         placeholder="e.g., CS101 – Intro to CS"
                                                                 />
                                                         </div>
+
+                                                        {/* Read-only reason (if any) so admins can see what student submitted */}
+                                                        {editing?.reason?.trim() && (
+                                                                <div className="small text-secondary mb-3">
+                                                                        <strong>Student reason:</strong> {editing.reason}
+                                                                </div>
+                                                        )}
+
                                                         <div className="d-flex justify-content-end gap-2">
                                                                 <button className="btn btn-sm btn-light" onClick={cancelEditing}>Cancel</button>
                                                                 <button
@@ -941,6 +932,9 @@ export default function AdminRooms() {
                                                         <div className="small mb-3">
                                                                 <div><strong>Professor:</strong> {confirmCancel.info?.professor || '—'}</div>
                                                                 <div><strong>Course:</strong> {confirmCancel.info?.course || '—'}</div>
+                                                                {confirmCancel.info?.reason?.trim() && (
+                                                                        <div><strong>Reason:</strong> {confirmCancel.info.reason}</div>
+                                                                )}
                                                         </div>
                                                         <div className="d-flex justify-content-end gap-2">
                                                                 <button className="btn btn-sm btn-light" onClick={confirmCancelNo}>No, keep</button>

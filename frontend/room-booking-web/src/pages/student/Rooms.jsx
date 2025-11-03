@@ -84,7 +84,7 @@ export default function RoomsStudent() {
         // Mirrors admin data sources
         // hoursMap: { [roomId]: Array<{weekday,startHHMM,endHHMM}> }
         const [hoursMap, setHoursMap] = useState({});
-        // notesMap: { [roomId]: { [weekday]: { [slotKey]: { professor, course } } } }
+        // notesMap: { [roomId]: { [weekday]: { [slotKey]: { professor, course, reason } } } }
         const [notesMap, setNotesMap] = useState({});
 
         const [loading, setLoading] = useState(true);
@@ -92,7 +92,7 @@ export default function RoomsStudent() {
 
         // Booking modal
         const [booking, setBooking] = useState(null);
-        // booking = { roomId, roomName, dateISO, startTs, endTs, name, reason }
+        // booking = { roomId, roomName, dateISO, startTs, endTs, name, reason, studentId, courseName }
 
         const buildingName = useMemo(
                 () => buildings.find(b => b.id === selBuildingId)?.name || '',
@@ -155,8 +155,8 @@ export default function RoomsStudent() {
                                 setErr('');
                                 setLoading(true);
 
-                                const { rooms } = await getFloorRooms(token, selFloorId);
-                                const list = Array.isArray(rooms) ? rooms : [];
+                                const floorRes = await getFloorRooms(token, selFloorId);
+                                const list = Array.isArray(floorRes?.rooms) ? floorRes.rooms : [];
                                 setRooms(list);
 
                                 // Weekly open hours per room
@@ -168,7 +168,7 @@ export default function RoomsStudent() {
                                 );
                                 setHoursMap(Object.fromEntries(hourEntries));
 
-                                // Slot notes per room
+                                // Slot notes per room (✅ always include reason)
                                 const noteEntries = await Promise.all(
                                         list.map(async (r) => {
                                                 const ns = await getRoomSlotNotes(token, r.id).catch(() => []);
@@ -185,12 +185,11 @@ export default function RoomsStudent() {
                                                 nMap[rid][n.weekday][slot.key] = {
                                                         professor: n.professor || '',
                                                         course: n.course || '',
-                                                        reason: n.reason || ''
+                                                        reason: n.reason || '',
                                                 };
                                         }
                                 }
                                 setNotesMap(nMap);
-
 
                         } catch (e) {
                                 setErr(e.message || 'Failed to load rooms');
@@ -232,9 +231,9 @@ export default function RoomsStudent() {
                                         // Apply bookings: if booked, mark unavailable (but keep note if already set)
                                         try {
                                                 const av = await getAvailability(r.id, params);
-                                                const starts = new Set(av.slots.map(s => s.startTs));
+                                                const starts = new Set((av?.slots || []).map(s => s.startTs));
                                                 TIME_SLOTS.forEach(s => {
-                                                        if (combined[s.key].available) {
+                                                        if (combined[s.key]?.available) {
                                                                 const startTs = hhmmToDate(dateStr, s.startHHMM);
                                                                 combined[s.key].available = starts.has(startTs);
                                                         }
@@ -252,7 +251,7 @@ export default function RoomsStudent() {
                 // eslint-disable-next-line react-hooks/exhaustive-deps
         }, [rooms, weekday, hoursMap, notesMap]);
 
-        // Auto-refresh (1s): pull latest hours/notes and recompute status + availability
+        // Auto-refresh (5s): pull latest hours/notes and recompute status + availability
         useEffect(() => {
                 if (!selFloorId || rooms.length === 0) return;
 
@@ -270,7 +269,7 @@ export default function RoomsStudent() {
                                 if (!alive) return;
                                 setHoursMap(Object.fromEntries(hourEntries));
 
-                                // refresh slot notes for each room
+                                // refresh slot notes for each room (✅ include reason)
                                 const noteEntries = await Promise.all(
                                         rooms.map(async (r) => {
                                                 const ns = await getRoomSlotNotes(token, r.id).catch(() => []);
@@ -286,7 +285,11 @@ export default function RoomsStudent() {
                                                 if (!slot) continue;
                                                 nMap[rid] = nMap[rid] || {};
                                                 nMap[rid][n.weekday] = nMap[rid][n.weekday] || {};
-                                                nMap[rid][n.weekday][slot.key] = { professor: n.professor || '', course: n.course || '' };
+                                                nMap[rid][n.weekday][slot.key] = {
+                                                        professor: n.professor || '',
+                                                        course: n.course || '',
+                                                        reason: n.reason || '',
+                                                };
                                         }
                                 }
                                 setNotesMap(nMap);
@@ -302,7 +305,6 @@ export default function RoomsStudent() {
                 return () => { alive = false; clearInterval(id); };
                 // eslint-disable-next-line react-hooks/exhaustive-deps
         }, [selFloorId, rooms, token]);
-
 
         // Booking
         function handleClickSlot(room, slotKey) {
@@ -340,7 +342,6 @@ export default function RoomsStudent() {
 
                         const { roomId, startTs, endTs, studentId, name, reason, courseName } = booking;
 
-                        // Send separate fields (cleaner for admin UI / backend)
                         await requestBooking(token, {
                                 roomId,
                                 startTs,
@@ -357,7 +358,6 @@ export default function RoomsStudent() {
                         alert(e.message || 'Failed to submit booking request');
                 }
         }
-
 
         // UI helpers
         const lineEllipsis = {
@@ -429,7 +429,6 @@ export default function RoomsStudent() {
                                 </div>
                         </div>
 
-
                         {err && <div className="alert alert-danger">{err}</div>}
 
                         {rooms.length === 0 ? (
@@ -470,7 +469,7 @@ export default function RoomsStudent() {
                                                                                                 {TIME_SLOTS.map(s => {
                                                                                                         const cell = slots[s.key] || { available: false };
                                                                                                         const available = !!cell.available;
-                                                                                                        const note = cell.note; // { professor, course } if present
+                                                                                                        const note = cell.note; // { professor, course, reason } if present
                                                                                                         const title = available
                                                                                                                 ? 'Available (click to book)'
                                                                                                                 : note
@@ -520,7 +519,6 @@ export default function RoomsStudent() {
                                                                                                                                                                 lineHeight: SLOT_LINE_HEIGHT,
                                                                                                                                                                 fontWeight: 600,
                                                                                                                                                                 textAlign: 'center',
-
                                                                                                                                                         }}
                                                                                                                                                 >
                                                                                                                                                         {note?.professor?.trim() || 'In use'}
@@ -532,7 +530,6 @@ export default function RoomsStudent() {
                                                                                                                                                                 lineHeight: SLOT_LINE_HEIGHT,
                                                                                                                                                                 textAlign: 'center',
                                                                                                                                                                 fontWeight: 600,
-
                                                                                                                                                         }}
                                                                                                                                                 >
                                                                                                                                                         {note?.course?.trim() || ''}
@@ -550,7 +547,6 @@ export default function RoomsStudent() {
                                                                                                                                                         </span>
                                                                                                                                                 )}
                                                                                                                                         </span>
-
                                                                                                                                 )}
                                                                                                                         </button>
                                                                                                                 </td>
@@ -604,7 +600,7 @@ export default function RoomsStudent() {
                                                                         placeholder="e.g., e2021...."
                                                                 />
                                                         </div>
-                                                        +<div className="mb-2">
+                                                        <div className="mb-2">
                                                                 <label className="form-label small mb-1">Course name</label>
                                                                 <input
                                                                         className="form-control form-control-sm"

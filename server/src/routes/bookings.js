@@ -1,6 +1,7 @@
-// src/routes/bookings.js
+// server/src/routes/bookings.js
 import { Router } from 'express';
-import { prisma } from '../prisma.js';
+import { prisma } from '../lib/prisma.js';
+import { slotKeys } from '../lib/timeSlots.js';
 import { z } from 'zod';
 import { authGuard, requireAdmin } from '../authGuard.js';
 import { emitAdmin } from '../lib/events.js';
@@ -19,7 +20,7 @@ const createOrUpdateSchema = z.object({
         message: 'endTs must be after startTs', path: ['endTs']
 });
 
-// for booking-requests
+// for booking-requests (student → PENDING)
 const requestCreateSchema = z.object({
         roomId: z.string().cuid(),
         startTs: z.coerce.date(),
@@ -46,7 +47,7 @@ async function hasOverlap({ roomId, startTs, endTs, excludeId }) {
         return count > 0;
 }
 
-// Approval considers both PENDING  CONFIRMED (except the request itself)
+// Approval considers both PENDING + CONFIRMED (except the request itself)
 async function hasOverlapForApproval({ roomId, startTs, endTs, excludeId }) {
         const count = await prisma.booking.count({
                 where: {
@@ -78,8 +79,8 @@ function checkPolicies({ startTs, endTs }) {
 }
 
 /* ========================================================
-   NEW: POST /bookings/booking-requests (student)
-   body: { roomId, startTs, endTs, reason?, studentId? }
+   STUDENT: POST /bookings/booking-requests
+   body: { roomId, startTs, endTs, reason?, studentId?, courseName? }
    Creates a PENDING booking request
    ======================================================== */
 router.post('/booking-requests', authGuard, async (req, res) => {
@@ -94,7 +95,7 @@ router.post('/booking-requests', authGuard, async (req, res) => {
         const room = await prisma.room.findUnique({ where: { id: roomId }, select: { id: true } });
         if (!room) return res.status(404).json({ error: 'Room not found' });
 
-        // allow multiple PENDINGs if you prefer; here we only block against CONFIRMED
+        // Block only against existing CONFIRMED bookings for request creation
         if (await hasOverlap({ roomId, startTs, endTs })) {
                 return res.status(409).json({ error: 'Time slot overlaps a confirmed booking' });
         }
@@ -113,10 +114,8 @@ router.post('/booking-requests', authGuard, async (req, res) => {
                 include: { room: true, user: true },
         });
 
-        // Persist (optional) and notify admins in real time
+        // Notify admins (best-effort)
         try {
-                // Optional persistence for unread counts
-                // await prisma.adminNotification.create({ data: { type: 'BOOKING_REQUEST', bookingId: booking.id } });
                 await emitAdmin({
                         type: 'BOOKING_REQUEST_CREATED',
                         payload: {
@@ -129,18 +128,14 @@ router.post('/booking-requests', authGuard, async (req, res) => {
                         }
                 });
         } catch (error) {
-                // Log non-fatal error
                 console.error('Failed to notify admins:', error);
         }
-
-
 
         return res.status(201).json(booking);
 });
 
 /* ========================================================
-   NEW: GET /bookings/admin/booking-requests (admin)
-   query: status=PENDING|CONFIRMED|REJECTED (default PENDING)
+   ADMIN: GET /bookings/admin/booking-requests?status=PENDING|CONFIRMED|REJECTED
    ======================================================== */
 router.get('/admin/booking-requests', authGuard, requireAdmin, async (req, res) => {
         const raw = String(req.query.status || 'PENDING').toUpperCase();
@@ -159,8 +154,11 @@ router.get('/admin/booking-requests', authGuard, requireAdmin, async (req, res) 
 });
 
 /* ========================================================
-   NEW: POST /bookings/admin/booking-requests/:id/approve (admin)
+   ADMIN: POST /bookings/admin/booking-requests/:id/approve
    body: { note? }
+   On approve:
+   - set CONFIRMED
+   - upsert a RoomSlotNote so both Admin & Student UIs show course + reason
    ======================================================== */
 router.post('/admin/booking-requests/:id/approve', authGuard, requireAdmin, async (req, res) => {
         const id = req.params.id;
@@ -179,21 +177,51 @@ router.post('/admin/booking-requests/:id/approve', authGuard, requireAdmin, asyn
                 return res.status(409).json({ error: 'Slot is no longer available; cannot approve' });
         }
 
-        const updated = await prisma.booking.update({
-                where: { id },
-                data: {
-                        status: 'CONFIRMED',
-                        decidedById: req.user.id,
-                        reason: note
-                                ? `${existing.reason ?? ''}${existing.reason ? ' — ' : ''}[APPROVE] ${note}`
-                                : existing.reason,
-                },
-                include: {
-                        user: { select: { id: true, name: true, email: true } },
-                        room: { select: { id: true, name: true } },
-                },
+        const updated = await prisma.$transaction(async (tx) => {
+                // 1) approve booking
+                const b = await tx.booking.update({
+                        where: { id },
+                        data: {
+                                status: 'CONFIRMED',
+                                decidedById: req.user.id,
+                                reason: note
+                                        ? `${existing.reason ?? ''}${existing.reason ? ' — ' : ''}[APPROVE] ${note}`
+                                        : existing.reason,
+                        },
+                        include: {
+                                user: { select: { id: true, name: true, email: true } },
+                                room: { select: { id: true, name: true } },
+                        },
+                });
+
+                // 2) write slot note so it renders as "In use" with course+reason in both UIs
+                const { weekday, startHHMM, endHHMM } = slotKeys(b.startTs, b.endTs);
+                await tx.roomSlotNote.upsert({
+                        where: {
+                                roomId_weekday_startHHMM_endHHMM: {
+                                        roomId: b.roomId, weekday, startHHMM, endHHMM
+                                }
+                        },
+                        update: {
+                                professor: b.user?.name || b.user?.email || '',
+                                course: b.courseName || '',
+                                reason: b.reason || null,
+                        },
+                        create: {
+                                roomId: b.roomId,
+                                weekday,
+                                startHHMM,
+                                endHHMM,
+                                professor: b.user?.name || b.user?.email || '',
+                                course: b.courseName || '',
+                                reason: b.reason || null,
+                        },
+                });
+
+                return b;
         });
 
+        // notify (best-effort)
         try {
                 await emitAdmin({
                         type: 'BOOKING_REQUEST_DECIDED',
@@ -206,25 +234,18 @@ router.post('/admin/booking-requests/:id/approve', authGuard, requireAdmin, asyn
                         }
                 });
         } catch (error) {
-                // Log non-fatal error
                 console.error('Failed to notify admins:', error);
         }
 
-        try {
-                emitAdmin({
-                        type: 'BOOKING_REQUEST_DECIDED',
-                        payload: {
-                                id: updated.id,
-                                status: updated.status, // 'CONFIRMED'
-                        }
-                });
-        } catch { }
         res.json(updated);
 });
 
 /* ========================================================
-   NEW: POST /bookings/admin/booking-requests/:id/reject (admin)
+   ADMIN: POST /bookings/admin/booking-requests/:id/reject
    body: { note? }
+   On reject:
+   - set REJECTED
+   - remove any matching RoomSlotNote for that slot (cleanup)
    ======================================================== */
 router.post('/admin/booking-requests/:id/reject', authGuard, requireAdmin, async (req, res) => {
         const id = req.params.id;
@@ -234,22 +255,49 @@ router.post('/admin/booking-requests/:id/reject', authGuard, requireAdmin, async
         if (!existing) return res.status(404).json({ error: 'Request not found' });
         if (existing.status !== 'PENDING') return res.status(400).json({ error: 'Request is not pending' });
 
-        const updated = await prisma.booking.update({
-                where: { id },
-                data: {
-                        status: 'REJECTED',
-                        decidedById: req.user.id,
-                        reason: note
-                                ? `${existing.reason ?? ''}${existing.reason ? ' — ' : ''}[REJECT] ${note}`
-                                : existing.reason,
-                },
-                include: {
-                        user: { select: { id: true, name: true, email: true } },
-                        room: { select: { id: true, name: true } },
-                },
+        const updated = await prisma.$transaction(async (tx) => {
+                const b = await tx.booking.update({
+                        where: { id },
+                        data: {
+                                status: 'REJECTED',
+                                decidedById: req.user.id,
+                                reason: note
+                                        ? `${existing.reason ?? ''}${existing.reason ? ' — ' : ''}[REJECT] ${note}`
+                                        : existing.reason,
+                        },
+                });
+
+                const { weekday, startHHMM, endHHMM } = slotKeys(b.startTs, b.endTs);
+                await tx.roomSlotNote.deleteMany({
+                        where: { roomId: b.roomId, weekday, startHHMM, endHHMM },
+                });
+
+                return b;
         });
 
         res.json(updated);
+});
+
+/* ========================================================
+   ADMIN: POST /bookings/booking-requests/:id/cancel (keep if you need admin-cancel)
+   Sets CANCELLED and clears the slot note
+   ======================================================== */
+router.post('/booking-requests/:id/cancel', authGuard, requireAdmin, async (req, res) => {
+        const id = req.params.id;
+
+        await prisma.$transaction(async (tx) => {
+                const b = await tx.booking.update({
+                        where: { id },
+                        data: { status: 'CANCELLED' },
+                });
+
+                const { weekday, startHHMM, endHHMM } = slotKeys(b.startTs, b.endTs);
+                await tx.roomSlotNote.deleteMany({
+                        where: { roomId: b.roomId, weekday, startHHMM, endHHMM },
+                });
+        });
+
+        res.json({ ok: true });
 });
 
 /* ========================================================
@@ -267,7 +315,6 @@ router.post('/', authGuard, async (req, res) => {
 
         const room = await prisma.room.findUnique({ where: { id: roomId }, select: { id: true } });
         if (!room) return res.status(404).json({ error: 'Room not found' });
-
 
         if (await hasOverlap({ roomId, startTs, endTs })) {
                 return res.status(409).json({ error: 'Time slot overlaps an existing booking' });
@@ -360,7 +407,7 @@ router.get('/my/list', authGuard, async (req, res) => {
                 select: {
                         id: true, startTs: true, endTs: true, status: true,
                         reason: true, studentId: true, courseName: true,
-                        room: { select: { id: true, name: true /* add building if you have a relation here */ } }
+                        room: { select: { id: true, name: true } }
                 }
         });
         res.json({ items });
@@ -408,7 +455,7 @@ router.get('/admin/list', authGuard, requireAdmin, async (req, res) => {
                                 id: true, startTs: true, endTs: true, status: true,
                                 reason: true, studentId: true, courseName: true,
                                 user: { select: { id: true, name: true, email: true } },
-                                room: { select: { id: true, name: true /*, building: true*/ } },
+                                room: { select: { id: true, name: true } },
                         }
                 }),
                 prisma.booking.count({ where }),
@@ -417,6 +464,4 @@ router.get('/admin/list', authGuard, requireAdmin, async (req, res) => {
         res.json({ items, page, pageSize, total, totalPages: Math.ceil(total / pageSize) || 1 });
 });
 
-
 export default router;
-

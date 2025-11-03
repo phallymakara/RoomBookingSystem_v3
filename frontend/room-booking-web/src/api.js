@@ -58,19 +58,19 @@ export async function getAvailability(
    ====================================================================== */
 
 /* ---------- student: create booking REQUEST (PENDING) ---------- */
-/* backend route from your routes file: POST /bookings/booking-requests */
-export async function requestBooking(token, { roomId, startTs, endTs, reason, studentId, courseName }) {
+// POST /bookings/booking-requests
+export async function requestBooking(token, { roomId, startTs, endTs, reason, studentId, courseName, name }) {
         const res = await fetch(`${BASE}/bookings/booking-requests`, {
                 method: 'POST',
                 headers: auth(token),
-                body: JSON.stringify({ roomId, startTs, endTs, reason, studentId, courseName })
+                body: JSON.stringify({ roomId, startTs, endTs, reason, studentId, courseName, name })
         });
         return handle(res);
 }
 
 /* ---------- student: cancel booking ---------- */
-/* your backend uses DELETE /bookings/:id (sets status=CANCELLED) */
-export async function cancelBooking(token, bookingId /*, reason (ignored by backend) */) {
+// DELETE /bookings/:id (status=CANCELLED)
+export async function cancelBooking(token, bookingId) {
         const res = await fetch(`${BASE}/bookings/${bookingId}`, {
                 method: 'DELETE',
                 headers: { Authorization: `Bearer ${token}` }
@@ -98,7 +98,7 @@ export async function createBooking(token, { roomId, startTs, endTs }) {
 }
 
 /* ---------- admin: list booking REQUESTS by status ---------- */
-/* GET /bookings/admin/booking-requests?status=PENDING|CONFIRMED|REJECTED */
+// GET /bookings/admin/booking-requests?status=PENDING|CONFIRMED|REJECTED
 export async function listBookingRequests(token, status = 'PENDING') {
         const qs = new URLSearchParams({ status });
         const res = await fetch(`${BASE}/bookings/admin/booking-requests?${qs.toString()}`, {
@@ -108,6 +108,8 @@ export async function listBookingRequests(token, status = 'PENDING') {
 }
 
 /* ---------- admin: decide booking request ---------- */
+// NOTE: if your backend routes are /booking-requests/:id/approve (non-admin prefix),
+// adjust these to match. The code below matches your earlier ADMIN endpoints.
 export async function approveBookingRequest(token, id, note) {
         const res = await fetch(`${BASE}/bookings/admin/booking-requests/${id}/approve`, {
                 method: 'POST',
@@ -155,7 +157,18 @@ export async function addRoomClosure(token, roomId, { startDate, endDate, reason
         return handle(res);
 }
 
-// frontend/src/api.js
+export async function getRoomClosures(token, roomId, { from, to } = {}) {
+        const qs = new URLSearchParams();
+        if (from) qs.set('from', from);
+        if (to) qs.set('to', to);
+        const res = await fetch(`${BASE}/rooms/${roomId}/closures${qs.toString() ? `?${qs}` : ''}`, {
+                headers: { Authorization: `Bearer ${token}` }
+        });
+        return handle(res);
+}
+
+/* ----- Slot notes (admin) ----- */
+// POST add single
 export async function addRoomSlotNote(token, roomId, { weekday, startHHMM, endHHMM, professor, course, reason }) {
         const res = await fetch(`${BASE}/rooms/${roomId}/slot-notes`, {
                 method: 'POST',
@@ -165,14 +178,33 @@ export async function addRoomSlotNote(token, roomId, { weekday, startHHMM, endHH
         return handle(res); // { ok: true }
 }
 
-
-export async function getRoomClosures(token, roomId, { from, to } = {}) {
-        const qs = new URLSearchParams();
-        if (from) qs.set('from', from);
-        if (to) qs.set('to', to);
-        const res = await fetch(`${BASE}/rooms/${roomId}/closures${qs.toString() ? `?${qs}` : ''}`, {
-                headers: { Authorization: `Bearer ${token}` }
+// GET all
+export async function getRoomSlotNotes(token, roomId) {
+        const res = await fetch(`${BASE}/rooms/${roomId}/slot-notes`, {
+                headers: auth(token),
+                cache: 'no-store'
         });
+        return handle(res); // array
+}
+
+// IMPORTANT: PUT body is a RAW ARRAY ([]) — NOT { notes: [...] }
+export async function setRoomSlotNotes(token, roomId, notesArray) {
+        const res = await fetch(`${BASE}/rooms/${roomId}/slot-notes`, {
+                method: 'PUT',
+                headers: auth(token),
+                body: JSON.stringify(notesArray),
+        });
+        if (res.status === 204) return true;
+        return handle(res);
+}
+
+export async function clearRoomSlotNote(token, roomId, { weekday, startHHMM, endHHMM }) {
+        const res = await fetch(`${BASE}/rooms/${roomId}/slot-notes`, {
+                method: 'DELETE',
+                headers: auth(token),
+                body: JSON.stringify({ weekday, startHHMM, endHHMM }),
+        });
+        if (res.status === 204) return true;
         return handle(res);
 }
 
@@ -275,50 +307,18 @@ export async function deleteRoom(token, roomId) {
         return handle(res);
 }
 
-// ADD or VERIFY these helpers look exactly like this:
-export async function getRoomSlotNotes(token, roomId) {
-        const res = await fetch(`${BASE}/rooms/${roomId}/slot-notes`, {
-                headers: auth(token),
-                cache: 'no-store'
-        });
-        return handle(res); // returns an array
-}
-
-// IMPORTANT: body must be a RAW ARRAY ([]) — NOT { notes: [...] }
-export async function setRoomSlotNotes(token, roomId, notesArray) {
-        const res = await fetch(`${BASE}/rooms/${roomId}/slot-notes`, {
-                method: 'PUT',
-                headers: auth(token),
-                body: JSON.stringify(notesArray),
-        });
-        if (res.status === 204) return true;
-        return handle(res);
-}
-
-
-
-export async function clearRoomSlotNote(token, roomId, { weekday, startHHMM, endHHMM }) {
-        const res = await fetch(`${BASE}/rooms/${roomId}/slot-notes`, {
-                method: 'DELETE',
-                headers: auth(token),
-                body: JSON.stringify({ weekday, startHHMM, endHHMM }),
-        });
-        if (res.status === 204) return true;
-        return handle(res);
-}
-
-
-// Student Booking Request
+/* ======================================================================
+   Admin SSE (optional)
+   ====================================================================== */
 export function openAdminEvents(token) {
-        // Attach token via query (SSE doesn't let us set headers in EventSource).
         const url = new URL(`${BASE}/events/admin`);
         url.searchParams.set('token', token);
-        // If your authGuard reads from Authorization header only, adjust the backend
-        // to also accept ?token=... (quick tweak in authGuard), or switch to a cookie.
         return new EventSource(url.toString(), { withCredentials: false });
 }
 
-// ----- admin stats -----
+/* ======================================================================
+   Stats / History helpers (optional)
+   ====================================================================== */
 export async function getAdminStats(token, { tzOffsetMinutes } = {}) {
         const qs = new URLSearchParams();
         if (typeof tzOffsetMinutes === 'number') qs.set('tzOffsetMinutes', String(tzOffsetMinutes));
@@ -328,7 +328,10 @@ export async function getAdminStats(token, { tzOffsetMinutes } = {}) {
         return handle(res);
 }
 
-export async function getBookingHistory(token, { statuses = [], page = 1, pageSize = 20, q = '', sort = 'createdAt', order = 'desc' } = {}) {
+export async function getBookingHistory(
+        token,
+        { statuses = [], page = 1, pageSize = 20, q = '', sort = 'createdAt', order = 'desc' } = {}
+) {
         const base = (import.meta?.env?.VITE_API_BASE_URL ?? '').toString().trim();
         const prefix = base === '' ? '' : (base.endsWith('/') ? base.slice(0, -1) : base);
         let url = `${prefix}/history`;
@@ -354,20 +357,11 @@ export async function getBookingHistory(token, { statuses = [], page = 1, pageSi
         return res.json();
 }
 
-
-// ---- tiny URL builder that won't throw ----
-function buildApiUrl(path, qsObj) {
-        // path like "stats" or "/history"
+/* ---- tiny URL builder that won't throw ---- */
+export function buildApiUrl(path, qsObj) {
         const p = path.startsWith('/') ? path : `/${path}`;
-
-        // Read env
         const raw = (import.meta?.env?.VITE_API_BASE_URL ?? '').toString().trim();
 
-        // Decide the base:
-        // - empty => same-origin
-        // - starts with http(s):// => absolute
-        // - starts with / => relative base (e.g., "/api")
-        // - otherwise treat as host:port and prepend http://
         let base = '';
         if (!raw) {
                 base = ''; // same origin
@@ -376,7 +370,6 @@ function buildApiUrl(path, qsObj) {
         } else if (raw.startsWith('/')) {
                 base = raw.replace(/\/+$/, '');
         } else {
-                // "localhost:3000" -> "http://localhost:3000"
                 base = `http://${raw.replace(/\/+$/, '')}`;
         }
 
@@ -392,7 +385,5 @@ function buildApiUrl(path, qsObj) {
                 const s = qs.toString();
                 if (s) url += `?${s}`;
         }
-
         return url;
 }
-
