@@ -329,11 +329,17 @@ export async function getAdminStats(token, { tzOffsetMinutes } = {}) {
 }
 
 // Charts
-export async function getStatsSeries(token, { days = 30 } = {}) {
-        const qs = new URLSearchParams({ days: String(days) });
+// existing
+export async function getStatsSeries(token, opts = {}) {
+        const qs = new URLSearchParams();
+        if (opts.days) qs.set('days', String(opts.days));
+        if (typeof opts.tzOffsetMinutes === 'number') qs.set('tzOffsetMinutes', String(opts.tzOffsetMinutes));
+        if (opts.month) qs.set('month', '1');
         const res = await fetch(`${BASE}/stats/series?${qs}`, { headers: { Authorization: `Bearer ${token}` } });
-        return handle(res); // [{date,CONFIRMED,REJECTED,CANCELLED,PENDING}]
+        return handle(res);
 }
+
+
 export async function getRoomUtilization(token, { days = 30 } = {}) {
         const qs = new URLSearchParams({ days: String(days) });
         const res = await fetch(`${BASE}/stats/room-utilization?${qs}`, { headers: { Authorization: `Bearer ${token}` } });

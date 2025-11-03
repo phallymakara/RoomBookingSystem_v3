@@ -37,7 +37,7 @@ export default function Overview() {
                                 if (alive && data) setStats(prev => ({ ...prev, ...data }));
                                 const [tiles, s, ru, bs] = await Promise.all([
                                         getAdminStats(token, { tzOffsetMinutes: 420 }),
-                                        getStatsSeries(token, { days: 30 }),
+                                        getStatsSeries(token, { month: 1, tzOffsetMinutes: 420 }),
                                         getRoomUtilization(token, { days: 30 }),
                                         getBuildingShare(token, { days: 30 }),
                                 ]);
@@ -65,8 +65,10 @@ export default function Overview() {
                 try { lineChart.current?.destroy(); } catch { }
                 try { barChart.current?.destroy(); } catch { }
                 try { pieChart.current?.destroy(); } catch { }
+                // Line: Bookings over time (use Day 1..N labels, and Y max=15)
                 if (lineRef.current && series.length) {
-                        const labels = series.map(d => d.date.slice(5)); // MM-DD
+                        // Force labels to Day 1..N so the first tick is 1
+                        const labels = series.map(pt => pt.day);
                         lineChart.current = new Chart(lineRef.current, {
                                 type: 'line',
                                 data: {
@@ -78,7 +80,22 @@ export default function Overview() {
                                                 { label: 'Pending', data: series.map(d => d.PENDING), tension: 0.3 },
                                         ]
                                 },
-                                options: { responsive: true, maintainAspectRatio: false }
+                                options: {
+                                        responsive: true,
+                                        maintainAspectRatio: false,
+                                        scales: {
+                                                y: {
+                                                        beginAtZero: true,
+                                                        suggestedMax: 15,   // ✅ starts with 0–15, but grows automatically if needed
+                                                        ticks: { stepSize: 1 }
+                                                },
+                                                x: {
+                                                        ticks: {
+                                                                callback: (value) => `D${labels[value]}`
+                                                        }
+                                                }
+                                        }
+                                }
                         });
                 }
                 if (barRef.current && roomUsage.length) {
@@ -135,7 +152,7 @@ export default function Overview() {
                         </div>
 
                         {/* Bookings over time (30d) */}
-                        <div className="card shadow-sm border-0 mt-3">
+                        <div className="card shadow-sm border-0 mt-3" style={{ marginLeft: '20px', marginRight: '25px' }}>
                                 <div className="card-body">
                                         <div className="text-secondary small mb-2">Bookings over time (last 30 days)</div>
                                         <div style={{ height: 280 }}><canvas ref={lineRef} /></div>
