@@ -371,7 +371,7 @@ export async function getBookingHistory(
 
 // Public read-only settings for students
 export async function getPublicSettings() {
-        const res = await fetch(`${BASE}/settings`, { cache: 'no-store' });
+        const res = await fetch(`${BASE}/settings`, { cache: 'no-store', credentials: 'include' });
         if (!res.ok) throw new Error(`Failed to load settings (${res.status})`);
         return res.json();
 }
@@ -383,10 +383,9 @@ export async function saveAdminSettings(payload) {
                 credentials: 'include',
                 body: JSON.stringify(payload),
         });
-        if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error(err.error || `Failed to save settings (${res.status})`);
-        }
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || `Failed to save settings (${res.status})`);
+        return data;
 }
 
 /* ---- tiny URL builder that won't throw ---- */
