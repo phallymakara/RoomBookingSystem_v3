@@ -77,10 +77,10 @@ export default function Overview() {
                                 data: {
                                         labels,
                                         datasets: [
-                                                { label: 'Approved', data: series.map(d => d.CONFIRMED), tension: 0.3 },
-                                                { label: 'Rejected', data: series.map(d => d.REJECTED), tension: 0.3 },
-                                                { label: 'Cancelled', data: series.map(d => d.CANCELLED), tension: 0.3 },
-                                                { label: 'Pending', data: series.map(d => d.PENDING), tension: 0.3 },
+                                                { label: 'Approved', data: series.map(d => d.CONFIRMED), tension: 0.5 },
+                                                { label: 'Rejected', data: series.map(d => d.REJECTED), tension: 0.5 },
+                                                { label: 'Cancelled', data: series.map(d => d.CANCELLED), tension: 0.5 },
+                                                { label: 'Pending', data: series.map(d => d.PENDING), tension: 0.5 },
                                         ]
                                 },
                                 options: {

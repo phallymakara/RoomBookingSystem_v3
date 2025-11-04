@@ -1,0 +1,28 @@
+/* Scroll container for tables (vertical only) */
+.table-scroll {
+        max-height: 85vh;
+        /* adjust as needed */
+        overflow-y: auto;
+        scrollbar-gutter: stable;
+        /* keep header/body columns aligned when scrollbar appears */
+}
+
+/* Sticky header inside a scroll container */
+.table-sticky {
+        table-layout: fixed;
+        /* keeps column widths aligned */
+        width: 100%;
+        border-collapse: separate;
+        /* fix Safari sticky quirk */
+        border-spacing: 0;
+}
+
+.table-sticky thead th {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        background-color: #212529;
+        /* match .table-dark */
+        color: #fff;
+        box-shadow: 0 2px 0 rgba(0, 0, 0, 0.05);
+}

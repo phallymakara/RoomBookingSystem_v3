@@ -50,7 +50,7 @@ function SortHeader({ field, active, order, onClick, children }) {
 export default function History() {
         const token = localStorage.getItem('token') || '';
 
-        const [statuses, setStatuses] = useState(['ACCEPTED', 'APPROVED', 'CONFIRMED', 'REJECTED', 'CANCELLED', 'PENDING']);
+        const [statuses] = useState([]); // empty = all statuses (no filter)
         const [q, setQ] = useState('');
         const [page, setPage] = useState(1);
         const [pageSize] = useState(20);

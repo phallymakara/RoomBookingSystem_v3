@@ -356,10 +356,6 @@ export async function getBookingHistory(
         token,
         { statuses = [], page = 1, pageSize = 20, q = '', sort = 'createdAt', order = 'desc' } = {}
 ) {
-        const base = (import.meta?.env?.VITE_API_BASE_URL ?? '').toString().trim();
-        const prefix = base === '' ? '' : (base.endsWith('/') ? base.slice(0, -1) : base);
-        let url = `${prefix}/history`;
-
         const qs = new URLSearchParams();
         if (statuses.length) qs.set('status', statuses.join(','));
         if (page) qs.set('page', String(page));
@@ -367,18 +363,10 @@ export async function getBookingHistory(
         if (q) qs.set('q', q);
         if (sort) qs.set('sort', sort);
         if (order) qs.set('order', order);
-        const query = qs.toString();
-        if (query) url += `?${query}`;
-
-        const res = await fetch(url, {
-                headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        const res = await fetch(`${BASE}/history${qs.toString() ? `?${qs}` : ''}`, {
+                headers: { Authorization: `Bearer ${token}` }
         });
-
-        if (!res.ok) {
-                const text = await res.text().catch(() => '');
-                throw new Error(text || `Failed to fetch history (${res.status})`);
-        }
-        return res.json();
+        return handle(res);
 }
 
 /* ---- tiny URL builder that won't throw ---- */

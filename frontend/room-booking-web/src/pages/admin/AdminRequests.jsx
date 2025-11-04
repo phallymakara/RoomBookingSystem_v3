@@ -1,3 +1,4 @@
+// frontend/room-booking-web/src/pages/admin/AdminRequests.jsx
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
@@ -6,10 +7,11 @@ import {
         rejectBookingRequest,
         getRoomSlotNotes,
         setRoomSlotNotes,
-        cancelBooking,          // ✅ missing before
-        clearRoomSlotNote,      // ✅ missing before
+        cancelBooking,          // ✅ used below
+        clearRoomSlotNote,      // ✅ used below
         openAdminEvents,
 } from '../../api';
+import './styles/table-scroll.css';
 
 const COLORS = { primary: '#272446', accent: '#c01d2e' };
 const POLL_MS = 5000;
@@ -17,12 +19,10 @@ const POLL_MS = 5000;
 export default function AdminRequests() {
         const token = localStorage.getItem('token') || '';
         const location = useLocation();
+
         const [unread, setUnread] = useState(
                 () => Number(localStorage.getItem('admin_unread') || '0')
         );
-
-
-
 
         // ✅ all hooks live INSIDE the component
         const [workingId, setWorkingId] = useState(null);
@@ -143,12 +143,10 @@ export default function AdminRequests() {
 
                         // 1) backend approve
                         await approveBookingRequest(token, id, ''); // POST /bookings/admin/booking-requests/:id/approve
-                        // (this throws with the backend's message if not OK)
 
-                        // 2) write/merge the slot-note (your current code already does this)
+                        // 2) write/merge the slot-note (your current code already follows this shape)
                         const k = noteKeyParts(b.startTs, b.endTs);
                         const who = (b.user?.name || b.user?.email || 'Student').trim();
-                        const line2 = (b.courseName && b.reason) ? `${b.courseName} — ${b.reason}` : (b.courseName || b.reason || '');
                         const existing = await getRoomSlotNotes(token, b.roomId);
                         const filtered = existing.filter(n => !sameKey(n, k));
                         filtered.push({
@@ -226,6 +224,24 @@ export default function AdminRequests() {
                 return a.weekday === b.weekday && a.startHHMM === b.startHHMM && a.endHHMM === b.endHHMM;
         }
 
+        function fmt(ts) {
+                try { return new Date(ts).toLocaleString(); } catch { return ts; }
+        }
+        function label(s) {
+                if (s === 'CONFIRMED') return 'Approved';
+                if (s === 'REJECTED') return 'Rejected';
+                return 'Pending';
+        }
+        function brandBtn(color) {
+                return {
+                        '--bs-btn-bg': color,
+                        '--bs-btn-border-color': color,
+                        '--bs-btn-hover-bg': '#1f1d37',
+                        '--bs-btn-hover-border-color': '#1f1d37',
+                        '--bs-btn-color': '#fff',
+                };
+        }
+
         return (
                 <div>
                         <div
@@ -250,10 +266,10 @@ export default function AdminRequests() {
                                                         style={status === 'REJECTED' ? brandBtn(COLORS.primary) : {}}
                                                 >Rejected</button>
                                         </div>
-                                        <button className="btn btn-sm btn-outline-secondary" onClick={() => load()}>
-                                                <i className="bi bi-arrow-clockwise me-1"></i> Refresh
-                                        </button>
                                 </div>
+                                <button className="btn btn-sm btn-outline-secondary" style={{ marginRight: '15px' }} onClick={() => load()}>
+                                        <i className="bi bi-arrow-clockwise me-1"></i> Refresh
+                                </button>
                         </div>
 
                         {toast && <div className="alert alert-warning">{toast}</div>}
@@ -270,11 +286,12 @@ export default function AdminRequests() {
                                         <div>No {labelText.toLowerCase()} requests.</div>
                                 </div>
                         ) : (
-                                <div className="table-responsive">
-                                        <table className="table table-hover align-middle">
-                                                <thead className="table-dark" style={{ position: 'sticky', top: 0, zIndex: 1 }}>
+                                // ⟵ WRAP TABLE IN A VERTICAL SCROLLER; MAKE THEAD STICKY
+                                <div className="table-responsive table-scroll" >
+                                        <table className="table table-hover align-middle table-sticky" >
+                                                <thead className="table-dark">
                                                         <tr>
-                                                                {['Student', 'Room', 'Start', 'End', 'Course', 'Reason', 'Status'].map((h) => (
+                                                                {['Student', 'Room', 'Start', 'End', 'Course', 'Reason', 'Status'].map(h => (
                                                                         <th key={h}>{h}</th>
                                                                 ))}
                                                         </tr>
@@ -288,6 +305,7 @@ export default function AdminRequests() {
                                                                                 <div className="text-secondary small">
                                                                                         {b.studentId ? `ID: ${b.studentId}` : (b.user?.email || '')}
                                                                                 </div>
+
                                                                                 {b.status === 'PENDING' && (
                                                                                         <div className="mt-2 d-flex flex-wrap gap-2">
                                                                                                 <button
@@ -310,6 +328,14 @@ export default function AdminRequests() {
                                                                                                 >
                                                                                                         <i className="bi bi-x-lg me-1"></i>Reject
                                                                                                 </button>
+
+                                                                                                <button
+                                                                                                        type="button"
+                                                                                                        className="btn btn-sm btn-outline-secondary"
+                                                                                                        onClick={() => onCancel(b.id)}
+                                                                                                >
+                                                                                                        Cancel
+                                                                                                </button>
                                                                                         </div>
                                                                                 )}
                                                                         </td>
@@ -320,11 +346,9 @@ export default function AdminRequests() {
                                                                         <td>{b.courseName || '—'}</td>
                                                                         <td>{b.reason || '—'}</td>
                                                                         <td>
-                                                                                <span className={`badge ${b.status === 'PENDING'
-                                                                                        ? 'bg-warning text-dark'
-                                                                                        : b.status === 'CONFIRMED'
-                                                                                                ? 'bg-success'
-                                                                                                : 'bg-danger'
+                                                                                <span className={`badge ${b.status === 'PENDING' ? 'bg-warning text-dark' :
+                                                                                        b.status === 'CONFIRMED' ? 'bg-success' :
+                                                                                                'bg-danger'
                                                                                         }`}>
                                                                                         {label(b.status)}
                                                                                 </span>
@@ -334,7 +358,6 @@ export default function AdminRequests() {
                                                 </tbody>
                                         </table>
                                 </div>
-
                         )}
                 </div>
         );
@@ -352,21 +375,4 @@ function summarize(b) {
         const who = b.user?.name || b.user?.email || 'Student';
         const room = b.room?.name || 'a room';
         return `${who} requested ${room}`;
-}
-function fmt(ts) {
-        try { return new Date(ts).toLocaleString(); } catch { return ts; }
-}
-function label(s) {
-        if (s === 'CONFIRMED') return 'Approved';
-        if (s === 'REJECTED') return 'Rejected';
-        return 'Pending';
-}
-function brandBtn(color) {
-        return {
-                '--bs-btn-bg': color,
-                '--bs-btn-border-color': color,
-                '--bs-btn-hover-bg': '#1f1d37',
-                '--bs-btn-hover-border-color': '#1f1d37',
-                '--bs-btn-color': '#fff',
-        };
 }

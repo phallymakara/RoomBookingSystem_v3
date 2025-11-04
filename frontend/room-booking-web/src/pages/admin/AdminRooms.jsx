@@ -651,7 +651,7 @@ export default function AdminRooms() {
 
         return (
                 <>
-                        <div className="row g-3">
+                        <div className="row g-3" style={{ marginLeft: '7px', marginRight: '10px', marginTop: '0.5px' }}>
                                 {/* LEFT */}
                                 <aside className="col-12 col-md-4 col-lg-3">
                                         <div className="card border-0 shadow-sm">

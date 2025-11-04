@@ -466,7 +466,7 @@ export default function AdminFloors() {
         // -----------------------------------------------------------
         return (
                 // Fill available height from AdminLayout; prevent outer scroll
-                <div className="row g-3 h-100" style={{ overflow: 'hidden' }}>
+                <div className="row g-3 h-100" style={{ overflow: 'hidden', marginLeft: '5px', marginRight: '5px', marginTop: '0.5px' }}>
                         {/* ===================== LEFT: Buildings + Floors ===================== */}
                         <aside className="col-12 col-md-4 col-lg-3 h-100">
                                 <div className="card border-0 shadow-sm h-100">
