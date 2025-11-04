@@ -369,6 +369,26 @@ export async function getBookingHistory(
         return handle(res);
 }
 
+// Public read-only settings for students
+export async function getPublicSettings() {
+        const res = await fetch(`${BASE}/settings`, { cache: 'no-store' });
+        if (!res.ok) throw new Error(`Failed to load settings (${res.status})`);
+        return res.json();
+}
+
+export async function saveAdminSettings(payload) {
+        const res = await fetch(`${BASE}/admin/settings`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error || `Failed to save settings (${res.status})`);
+        }
+}
+
 /* ---- tiny URL builder that won't throw ---- */
 export function buildApiUrl(path, qsObj) {
         const p = path.startsWith('/') ? path : `/${path}`;

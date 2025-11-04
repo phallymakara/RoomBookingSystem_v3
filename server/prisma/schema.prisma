@@ -165,4 +165,18 @@ model Policy {
   value String
 }
 
+model Setting {
+  id                     Int     @id @default(1)
+  campusName             String  @db.VarChar(100)
+  defaultOpenStart       String  @db.VarChar(5)   // "08:00"
+  defaultOpenEnd         String  @db.VarChar(5)   // "18:00"
+  telegramLink           String? @db.VarChar(255)
+
+  autoCancelEnabled      Boolean @default(false)
+  autoCancelGraceMinutes Int     @default(15)
+
+  updatedAt              DateTime @updatedAt
+}
+
+
 

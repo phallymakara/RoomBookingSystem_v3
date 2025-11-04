@@ -42,10 +42,10 @@ router.get('/', requireAuth, requireRole('ADMIN'), async (req, res) => {
                 }
 
                 if (q) {
-                        // Search by room/building/user
+                        // Search by room / building (via floor) / user
                         where.OR = [
                                 { room: { name: { contains: q, mode: 'insensitive' } } },
-                                { room: { building: { name: { contains: q, mode: 'insensitive' } } } },
+                                { room: { floor: { building: { name: { contains: q, mode: 'insensitive' } } } } },
                                 { user: { name: { contains: q, mode: 'insensitive' } } },
                                 { user: { email: { contains: q, mode: 'insensitive' } } },
                         ];
@@ -61,7 +61,7 @@ router.get('/', requireAuth, requireRole('ADMIN'), async (req, res) => {
                         prisma.booking.findMany({
                                 where,
                                 include: {
-                                        room: { include: { building: true } },
+                                        room: { include: { floor: { include: { building: true } } } },
                                         user: { select: { id: true, name: true, email: true } },
                                 },
                                 orderBy: { [sortField]: sortOrder },
@@ -78,7 +78,9 @@ router.get('/', requireAuth, requireRole('ADMIN'), async (req, res) => {
                         endTs: b.endTs,
                         createdAt: b.createdAt,
                         room: b.room ? { id: b.room.id, name: b.room.name } : null,
-                        building: b.room?.building ? { id: b.room.building.id, name: b.room.building.name } : null,
+                        building: b.room?.floor?.building
+                                ? { id: b.room.floor.building.id, name: b.room.floor.building.name }
+                                : null,
                         user: b.user ? { id: b.user.id, name: b.user.name, email: b.user.email } : null,
                         cancelReason: b.cancelReason ?? b.cancellationReason ?? null,
                         courseName: b.courseName ?? null,

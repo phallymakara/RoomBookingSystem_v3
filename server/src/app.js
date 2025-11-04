@@ -8,6 +8,7 @@ import { prisma } from './lib/prisma.js';
 import authRouter from './routes/auth.js';
 import roomsRouter from './routes/rooms.js';
 import bookingsRouter from './routes/bookings.js';
+import settingsRouter from './routes/settings.js';
 import buildingsRouter from './routes/buildings.js';
 import historyRouter from './routes/history.js';
 import { authGuard } from './authGuard.js';
@@ -31,6 +32,7 @@ app.use('/bookings', bookingsRouter);
 app.use('/events', eventsRouter);
 app.use('/stats', statsRouter);
 app.use('/history', historyRouter);
+app.use('/settings', settingsRouter);
 
 // Example protected route
 app.get('/me', authGuard, async (req, res) => {

@@ -13,7 +13,7 @@ import {
 } from '../../api';
 import './styles/table-scroll.css';
 
-const COLORS = { primary: '#272446', accent: '#c01d2e' };
+const COLORS = { primary: '#252444', accent: '#CC4448' };
 const POLL_MS = 5000;
 
 export default function AdminRequests() {
@@ -281,13 +281,13 @@ export default function AdminRequests() {
                                         <span>Loading…</span>
                                 </div>
                         ) : items.length === 0 ? (
-                                <div className="alert alert-light border d-flex align-items-center">
+                                <div className="alert alert-light border d-flex align-items-center" style={{ marginLeft: '10px', marginRight: "10px" }}>
                                         <i className="bi bi-inbox me-2"></i>
                                         <div>No {labelText.toLowerCase()} requests.</div>
                                 </div>
                         ) : (
                                 // ⟵ WRAP TABLE IN A VERTICAL SCROLLER; MAKE THEAD STICKY
-                                <div className="table-responsive table-scroll" >
+                                <div className="table-responsive table-scroll" style={{ marginLeft: '10px', marginRight: '10px' }} >
                                         <table className="table table-hover align-middle table-sticky" >
                                                 <thead className="table-dark">
                                                         <tr>

@@ -1,5 +1,6 @@
 // frontend/src/pages/student/History.jsx
 import { useEffect, useMemo, useState } from 'react';
+import './styles/history.css'; // ⟵ enables .table-scroll + .table-sticky
 import { getBookingHistory } from '../../api';
 
 const STATUS_LABELS = {
@@ -50,7 +51,7 @@ function SortHeader({ field, active, order, onClick, children }) {
 export default function History() {
         const token = localStorage.getItem('token') || '';
 
-        const [statuses] = useState([]); // empty = all statuses (no filter)
+        const [statuses, setStatuses] = useState([]); // empty = all statuses (no filter)
         const [q, setQ] = useState('');
         const [page, setPage] = useState(1);
         const [pageSize] = useState(20);
@@ -117,46 +118,25 @@ export default function History() {
 
         return (
                 <>
-                        <h2 className="h4 mb-3">History</h2>
+                        <h2 className="h4 mb-3" style={{ marginLeft: '8px', marginTop: '10px' }}>History</h2>
                         {err && <div className="alert alert-danger">{err}</div>}
 
                         {/* Filters */}
-                        <div className="card border-0 shadow-sm mb-3">
+                        <div className="card border-0 shadow-sm mb-3" style={{ marginLeft: '8px', marginRight: '10px' }}>
                                 <div className="card-body">
                                         <div className="row g-2 align-items-center">
-                                                <div className="col-12 col-md-auto">
+                                                <div className="col-12 d-flex flex-wrap align-items-center gap-2">
                                                         <input
                                                                 className="form-control"
+                                                                style={{ maxWidth: '300px', flexGrow: 0 }}
                                                                 placeholder="Search room, building, user…"
                                                                 value={q}
                                                                 onChange={(e) => { setPage(1); setQ(e.target.value); }}
                                                         />
-                                                </div>
 
-                                                <div className="col-12 col-md">
-                                                        <div className="d-flex flex-wrap gap-2">
-                                                                {ALL_STATUSES.map(s => (
-                                                                        <button
-                                                                                key={s}
-                                                                                type="button"
-                                                                                className={`btn btn-sm ${statuses.includes(s) ? 'btn-primary' : 'btn-outline-secondary'}`}
-                                                                                onClick={() => toggleStatus(s)}
-                                                                        >
-                                                                                {STATUS_LABELS[s] || s}
-                                                                        </button>
-                                                                ))}
-                                                                <button type="button" className="btn btn-sm btn-outline-secondary" onClick={selectAll}>
-                                                                        Select all
-                                                                </button>
-                                                                <button type="button" className="btn btn-sm btn-outline-secondary" onClick={clearAll}>
-                                                                        Clear
-                                                                </button>
-                                                        </div>
-                                                </div>
-
-                                                <div className="col-12 col-md-auto ms-auto d-flex gap-2">
                                                         <select
-                                                                className="form-select form-select-sm"
+                                                                className="form-select form-select-sm "
+                                                                style={{ maxWidth: '200px', flexGrow: 0 }}
                                                                 value={sort}
                                                                 onChange={(e) => { setSort(e.target.value); setOrder('desc'); setPage(1); }}
                                                         >
@@ -165,24 +145,28 @@ export default function History() {
                                                                 <option value="endTs">Sort by end</option>
                                                                 <option value="status">Sort by status</option>
                                                         </select>
+
                                                         <select
                                                                 className="form-select form-select-sm"
+                                                                style={{ maxWidth: '200px', flexGrow: 0 }}
                                                                 value={order}
                                                                 onChange={(e) => { setOrder(e.target.value); setPage(1); }}
                                                         >
-                                                                <option value="desc">Desc</option>
-                                                                <option value="asc">Asc</option>
+                                                                <option value="desc">Descent</option>
+                                                                <option value="asc">Ascent</option>
                                                         </select>
                                                 </div>
                                         </div>
                                 </div>
                         </div>
 
+
                         {/* Table */}
-                        <div className="card border-0 shadow-sm">
-                                <div className="table-responsive">
-                                        <table className="table align-middle mb-0">
-                                                <thead className="table-light">
+                        <div className="card border-0 shadow-sm" style={{ marginLeft: '8px', marginRight: '10px' }} >
+                                {/* Make body scroll while header stays fixed */}
+                                <div className="table-responsive table-scroll">
+                                        <table className="table align-middle mb-0 table-sticky">
+                                                <thead className="table-dark">
                                                         <tr>
                                                                 <SortHeader field="createdAt" active={sort} order={order} onClick={headerSort}>Created</SortHeader>
                                                                 <SortHeader field="startTs" active={sort} order={order} onClick={headerSort}>Start</SortHeader>
@@ -198,9 +182,9 @@ export default function History() {
                                                 </thead>
                                                 <tbody>
                                                         {loading ? (
-                                                                <tr><td colSpan={8} className="text-center py-4">Loading…</td></tr>
+                                                                <tr><td colSpan={10} className="text-center py-4">Loading…</td></tr>
                                                         ) : data.items.length === 0 ? (
-                                                                <tr><td colSpan={8} className="text-center py-4">No records</td></tr>
+                                                                <tr><td colSpan={10} className="text-center py-4">No records</td></tr>
                                                         ) : (
                                                                 data.items.map(row => (
                                                                         <tr key={row.id}>

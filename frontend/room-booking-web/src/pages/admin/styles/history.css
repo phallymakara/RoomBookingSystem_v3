@@ -1,0 +1,6 @@
+/* frontend/.../styles/history.css */
+.table-sticky thead th {
+        background-color: #252444;
+        /* brand primary */
+        color: #fff;
+}

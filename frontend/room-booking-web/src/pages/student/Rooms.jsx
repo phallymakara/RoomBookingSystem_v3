@@ -434,7 +434,7 @@ export default function RoomsStudent() {
                         {rooms.length === 0 ? (
                                 <div className="alert alert-secondary">No rooms found.</div>
                         ) : (
-                                <div className="card border-0 shadow-sm">
+                                <div className="card border-0 shadow-sm" style={{ marginLeft: '10px', marginRight: '10px' }}>
                                         <div className="card-body">
                                                 <div className="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
                                                         <div>
