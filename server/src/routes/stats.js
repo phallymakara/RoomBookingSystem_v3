@@ -124,9 +124,19 @@ router.get('/series', async (req, res) => {
                 }
                 for (const r of rows) {
                         const d = r.createdAt;
-                        const ymd = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
-                                .toISOString().slice(0, 10);
-                        if (map[k] && map[k][r.status] !== undefined) map[k][r.status] += 1;
+                        const VALID = new Set(['CONFIRMED', 'REJECTED', 'CANCELLED', 'PENDING']);
+                        for (const r of rows) {
+                                const d = r.createdAt;
+                                const key = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
+                                        .toISOString().slice(0, 10);
+
+                                const bucket = map[key];
+                                if (!bucket) continue; // out of prefilled range (shouldn't happen, but safe)
+
+                                // guard against any legacy/null statuses so it never crashes
+                                const status = VALID.has(r.status) ? r.status : 'PENDING';
+                                bucket[status] += 1;
+                        }
                 }
                 // Return ordered array with consistent shape {day, ...}
                 res.json(labels.map((_, i) => {

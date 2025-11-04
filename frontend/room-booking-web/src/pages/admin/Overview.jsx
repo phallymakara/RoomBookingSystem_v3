@@ -74,7 +74,7 @@ export default function Overview() {
                                 data: {
                                         labels,
                                         datasets: [
-                                                { label: 'Confirmed', data: series.map(d => d.CONFIRMED), tension: 0.3 },
+                                                { label: 'Approved', data: series.map(d => d.CONFIRMED), tension: 0.3 },
                                                 { label: 'Rejected', data: series.map(d => d.REJECTED), tension: 0.3 },
                                                 { label: 'Cancelled', data: series.map(d => d.CANCELLED), tension: 0.3 },
                                                 { label: 'Pending', data: series.map(d => d.PENDING), tension: 0.3 },
@@ -85,9 +85,15 @@ export default function Overview() {
                                         maintainAspectRatio: false,
                                         scales: {
                                                 y: {
+                                                        // show 1..15 by default, but auto-grow if data > 15
                                                         beginAtZero: true,
-                                                        suggestedMax: 15,   // ✅ starts with 0–15, but grows automatically if needed
-                                                        ticks: { stepSize: 1 }
+                                                        suggestedMin: 1,
+                                                        suggestedMax: 15,
+                                                        ticks: {
+                                                                stepSize: 1,
+                                                                // keep y labels as integers only
+                                                                callback: (v) => Number.isInteger(v) ? v : ''
+                                                        }
                                                 },
                                                 x: {
                                                         ticks: {
