@@ -32,7 +32,7 @@ app.use('/bookings', bookingsRouter);
 app.use('/events', eventsRouter);
 app.use('/stats', statsRouter);
 app.use('/history', historyRouter);
-app.use('/settings', settingsRouter);
+app.use('/', settingsRouter);
 
 // Example protected route
 app.get('/me', authGuard, async (req, res) => {

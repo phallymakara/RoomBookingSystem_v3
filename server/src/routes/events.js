@@ -15,7 +15,8 @@ function sseAuth(req, res, next) {
         const qToken = req.query?.token;
         if (qToken) {
                 try {
-                        const payload = jwt.verify(qToken, process.env.JWT_SECRET);
+                        const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
+                        const payload = jwt.verify(qToken, JWT_SECRET);
                         req.user = payload;
                         return next();
                 } catch (e) {

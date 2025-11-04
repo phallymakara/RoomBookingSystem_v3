@@ -370,10 +370,11 @@ export async function getBookingHistory(
 }
 
 // Public read-only settings for students
-export async function getPublicSettings() {
-        const res = await fetch(`${BASE}/settings`, { cache: 'no-store', credentials: 'include' });
-        if (!res.ok) throw new Error(`Failed to load settings (${res.status})`);
-        return res.json();
+export async function getAdminSettings() {
+        const res = await fetch(`${BASE}/admin/settings`, { credentials: 'include' });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || `Failed to load settings (${res.status})`);
+        return data;
 }
 
 export async function saveAdminSettings(payload) {
@@ -385,6 +386,13 @@ export async function saveAdminSettings(payload) {
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || `Failed to save settings (${res.status})`);
+        return data;
+}
+
+export async function getPublicSettings() {
+        const res = await fetch(`${BASE}/settings`, { cache: 'no-store', credentials: 'include' });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || `Failed to load settings (${res.status})`);
         return data;
 }
 
