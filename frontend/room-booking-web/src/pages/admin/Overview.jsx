@@ -69,6 +69,9 @@ export default function Overview() {
                 if (lineRef.current && series.length) {
                         // Force labels to Day 1..N so the first tick is 1
                         const labels = series.map(pt => pt.day);
+                        const month = new Date().getMonth();
+                        const year = new Date().getFullYear();
+                        const dateLabels = labels.map(d => new Date(year, month, d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }));
                         lineChart.current = new Chart(lineRef.current, {
                                 type: 'line',
                                 data: {
@@ -87,18 +90,14 @@ export default function Overview() {
                                                 y: {
                                                         // show 1..15 by default, but auto-grow if data > 15
                                                         beginAtZero: true,
-                                                        suggestedMin: 1,
                                                         suggestedMax: 15,
                                                         ticks: {
                                                                 stepSize: 1,
-                                                                // keep y labels as integers only
-                                                                callback: (v) => Number.isInteger(v) ? v : ''
+                                                                callback: (v) => Number.isInteger(v) ? v : ''  // show whole numbers only
                                                         }
                                                 },
                                                 x: {
-                                                        ticks: {
-                                                                callback: (value) => `D${labels[value]}`
-                                                        }
+                                                        ticks: { callback: (value) => dateLabels[value] }
                                                 }
                                         }
                                 }

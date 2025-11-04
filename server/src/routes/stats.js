@@ -66,88 +66,80 @@ function getPastDaysRange(days = 30) {
 }
 function ymd(d) { return d.toISOString().slice(0, 10); }
 
-// Current month range in *local* time (uses tz offset), returned as UTC datetimes
+
 function getCurrentMonthRange(tzOffsetMinutes = 0) {
         const nowUtc = new Date();
-        // Convert to local
         const nowLocalMs = nowUtc.getTime() + tzOffsetMinutes * 60_000;
         const nowLocal = new Date(nowLocalMs);
+
         const startLocal = new Date(nowLocal.getFullYear(), nowLocal.getMonth(), 1, 0, 0, 0, 0);
-        const endLocal = new Date(nowLocal.getFullYear(), nowLocal.getMonth() + 1, 0, 23, 59, 59, 999); // end of this month
-        // Convert back to UTC
+        const endLocal = new Date(nowLocal.getFullYear(), nowLocal.getMonth() + 1, 0, 23, 59, 59, 999);
+
         const startUtc = new Date(startLocal.getTime() - tzOffsetMinutes * 60_000);
         const endUtc = new Date(endLocal.getTime() - tzOffsetMinutes * 60_000);
-        return { start: startUtc, end: endUtc, daysInMonth: endLocal.getDate(), today: nowLocal.getDate() };
+
+        return {
+                start: startUtc,
+                end: endUtc,
+                daysInMonth: endLocal.getDate(),
+                today: nowLocal.getDate(),
+        };
 }
 
-// GET /stats/series?days=30
-// Daily counts by status over the last N days (by createdAt)
-// GET /stats/series?days=30
+// GET /stats/series
 router.get('/series', async (req, res) => {
         try {
                 const tz = Number(req.query.tzOffsetMinutes ?? 0) || 0;
                 const monthMode = String(req.query.month || '').trim() === '1';
-                let range, labels;
+
+                let rangeStart, rangeEnd, labels;
+
                 if (monthMode) {
-                        const { start, end, today } = getCurrentMonthRange(tz);
-                        range = { start, end };
-                        labels = Array.from({ length: today }, (_, i) => i + 1); // 1..today
+                        const { start, end, daysInMonth } = getCurrentMonthRange(tz);
+                        rangeStart = start;
+                        rangeEnd = end;
+                        labels = Array.from({ length: daysInMonth }, (_, i) => i + 1); // 1..daysInMonth
                 } else {
                         const days = Math.min(Math.max(parseInt(req.query.days || '30', 10), 1), 120);
                         const { start, end } = getPastDaysRange(days);
-                        range = { start, end };
-                        labels = Array.from({ length: days }, (_, i) => i + 1); // Day 1..N
+                        rangeStart = start;
+                        rangeEnd = end;
+                        labels = Array.from({ length: days }, (_, i) => i + 1); // 1..N
                 }
 
-                // ✅ only fields we actually use
                 const rows = await prisma.booking.findMany({
-                        where: { createdAt: { gte: range.start, lte: range.end } },
+                        where: { createdAt: { gte: rangeStart, lte: rangeEnd } },
                         select: { createdAt: true, status: true },
                 });
 
+                // prefill buckets
                 const map = {};
-                if (monthMode) {
-                        // Pre-fill each calendar day of this month up to "today"
-                        const { start } = getCurrentMonthRange(tz);
-                        for (let i = 0; i < labels.length; i++) {
-                                const d = new Date(start.getTime());
-                                d.setUTCDate(d.getUTCDate() + i);
-                                map[ymd(d)] = { day: i + 1, CONFIRMED: 0, REJECTED: 0, CANCELLED: 0, PENDING: 0 };
-                        }
-                } else {
-                        const { start } = range;
-                        for (let i = 0; i < labels.length; i++) {
-                                const d = new Date(start.getTime());
-                                d.setUTCDate(start.getUTCDate() + i);
-                                map[ymd(d)] = { day: i + 1, CONFIRMED: 0, REJECTED: 0, CANCELLED: 0, PENDING: 0 };
-                        }
+                for (let i = 0; i < labels.length; i++) {
+                        const d = new Date(rangeStart.getTime());
+                        d.setUTCDate(d.getUTCDate() + i);
+                        const ymd = d.toISOString().slice(0, 10);
+                        map[ymd] = { day: i + 1, CONFIRMED: 0, REJECTED: 0, CANCELLED: 0, PENDING: 0 };
                 }
+
+                const VALID = new Set(['CONFIRMED', 'REJECTED', 'CANCELLED', 'PENDING']);
                 for (const r of rows) {
                         const d = r.createdAt;
-                        const VALID = new Set(['CONFIRMED', 'REJECTED', 'CANCELLED', 'PENDING']);
-                        for (const r of rows) {
-                                const d = r.createdAt;
-                                const key = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
-                                        .toISOString().slice(0, 10);
-
-                                const bucket = map[key];
-                                if (!bucket) continue; // out of prefilled range (shouldn't happen, but safe)
-
-                                // guard against any legacy/null statuses so it never crashes
-                                const status = VALID.has(r.status) ? r.status : 'PENDING';
-                                bucket[status] += 1;
-                        }
+                        const key = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
+                                .toISOString().slice(0, 10);
+                        const bucket = map[key];
+                        if (!bucket) continue;
+                        const status = VALID.has(r.status) ? r.status : 'PENDING';
+                        bucket[status] += 1;
                 }
-                // Return ordered array with consistent shape {day, ...}
-                res.json(labels.map((_, i) => {
-                        // find the key for this index (monthMode and rolling mode both filled in order)
-                        return Object.values(map)[i] || { day: i + 1, CONFIRMED: 0, REJECTED: 0, CANCELLED: 0, PENDING: 0 };
-                }));
+
+                // return days 1..N in order
+                res.json(Object.values(map));
         } catch (e) {
                 console.error('[stats/series]', e);
                 res.status(500).json({ error: 'Failed to load series' });
         }
 });
+
 
 // GET /stats/room-utilization?days=30
 // Total booked HOURS per room (CONFIRMED) within range
