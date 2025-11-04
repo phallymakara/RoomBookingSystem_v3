@@ -77,6 +77,27 @@ button:focus-visible {
   overflow: auto;
 }
 
+.table-sticky thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background-color: #212529;
+  /* matches .table-dark */
+  color: #fff;
+}
+
+
+.table-sticky thead th,
+.table-sticky thead {
+  background: #212529;
+  /* matches .table-dark */
+  color: #fff;
+}
+
+.table-sticky thead th {
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.05);
+}
+
 /* sticky table header */
 .sticky-head th {
   position: sticky;

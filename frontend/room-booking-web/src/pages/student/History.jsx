@@ -59,8 +59,8 @@ export default function History() {
                                         <div>No bookings yet.</div>
                                 </div>
                         ) : (
-                                <div className="table-responsive">
-                                        <table className="table table-hover align-middle">
+                                <div className="table-responsive" style={{ maxHeight: 480, overflowY: 'auto' }}>
+                                        <table className="table table-hover align-middle table-sticky">
                                                 <thead className="table-dark">
                                                         <tr>
                                                                 <th>Room</th>
@@ -76,10 +76,10 @@ export default function History() {
                                                         {items.map(b => (
                                                                 <tr key={b.id}>
                                                                         <td>{b.room?.name || '—'}</td>
-                                                                        <td>{b.courseName || '—'}</td>
-                                                                        <td>{b.reason || '—'}</td>
                                                                         <td>{fmtDate(b.startTs)}</td>
                                                                         <td>{fmtDate(b.endTs)}</td>
+                                                                        <td>{b.courseName || '—'}</td>
+                                                                        <td>{b.reason || '—'}</td>
                                                                         <td><span className={`badge bg-${badge(b.status)}`}>{b.status}</span></td>
                                                                         <td className="text-end">
                                                                                 {b.status === 'CONFIRMED' && (
