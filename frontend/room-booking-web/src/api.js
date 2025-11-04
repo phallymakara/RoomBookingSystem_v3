@@ -370,18 +370,19 @@ export async function getBookingHistory(
 }
 
 // Public read-only settings for students
-export async function getAdminSettings() {
-        const res = await fetch(`${BASE}/admin/settings`, { credentials: 'include' });
+export async function getAdminSettings(token) {
+        const res = await fetch(`${BASE}/admin/settings`, {
+                headers: { Authorization: `Bearer ${token}` }
+        });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || `Failed to load settings (${res.status})`);
         return data;
 }
 
-export async function saveAdminSettings(payload) {
+export async function saveAdminSettings(token, payload) {
         const res = await fetch(`${BASE}/admin/settings`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
+                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload),
         });
         const data = await res.json().catch(() => ({}));
@@ -390,7 +391,7 @@ export async function saveAdminSettings(payload) {
 }
 
 export async function getPublicSettings() {
-        const res = await fetch(`${BASE}/settings`, { cache: 'no-store', credentials: 'include' });
+        const res = await fetch(`${BASE}/settings`, { cache: 'no-store' });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || `Failed to load settings (${res.status})`);
         return data;

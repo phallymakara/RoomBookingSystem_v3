@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { getAdminSettings, saveAdminSettings } from '../../api';
 
 export default function AdminSettings() {
         const [loading, setLoading] = useState(true);
@@ -19,9 +20,11 @@ export default function AdminSettings() {
         useEffect(() => {
                 (async () => {
                         try {
-                                const res = await fetch('/admin/settings', { credentials: 'include' });
-                                const data = await res.json();
+                                const token = localStorage.getItem('token') || '';
+                                const data = await getAdminSettings(token); // requires Bearer
                                 setS(v => ({ ...v, ...data }));
+                        } catch (e) {
+                                alert(e.message || 'Failed to load settings');
                         } finally { setLoading(false); }
                 })();
         }, []);
@@ -44,23 +47,18 @@ export default function AdminSettings() {
 
                 setSaving(true);
                 try {
-                        const res = await fetch('/admin/settings', {
-                                method: 'PUT',
-                                headers: { 'Content-Type': 'application/json' },
-                                credentials: 'include',
-                                body: JSON.stringify({
-                                        campusName: s.campusName.trim(),
-                                        defaultOpenStart: s.defaultOpenStart,
-                                        defaultOpenEnd: s.defaultOpenEnd,
-                                        telegramLink: s.telegramLink || null,
-                                        autoCancelEnabled: !!s.autoCancelEnabled,
-                                        autoCancelGraceMinutes: +s.autoCancelGraceMinutes || 0
-                                }),
+                        const token = localStorage.getItem('token') || '';
+                        await saveAdminSettings(token, {
+                                campusName: s.campusName.trim(),
+                                defaultOpenStart: s.defaultOpenStart,
+                                defaultOpenEnd: s.defaultOpenEnd,
+                                telegramLink: s.telegramLink || null,
+                                autoCancelEnabled: !!s.autoCancelEnabled,
+                                autoCancelGraceMinutes: +s.autoCancelGraceMinutes || 0
                         });
-                        if (!res.ok) throw new Error('Failed to save settings');
                         alert('Settings saved ✅');
                 } catch (e) {
-                        alert(e.message || 'Failed to save');
+                        alert(e.message || 'Failed to save settings');
                 } finally { setSaving(false); }
         }
 
@@ -68,8 +66,12 @@ export default function AdminSettings() {
                 if (!s.reportFrom || !s.reportTo) return alert('Please choose From and To dates.');
                 setExporting(true);
                 try {
-                        const url = `/admin/reports/export?format=${encodeURIComponent(s.reportFormat)}&from=${encodeURIComponent(s.reportFrom)}&to=${encodeURIComponent(s.reportTo)}`;
-                        const res = await fetch(url, { credentials: 'include' });
+                        const token = localStorage.getItem('token') || '';
+                        const url = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/admin/reports/export` +
+                                `?format=${encodeURIComponent(s.reportFormat)}` +
+                                `&from=${encodeURIComponent(s.reportFrom)}` +
+                                `&to=${encodeURIComponent(s.reportTo)}`;
+                        const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
                         if (!res.ok) throw new Error('Export failed');
                         const blob = await res.blob();
                         const ext = s.reportFormat === 'xlsx' ? 'xlsx' : s.reportFormat;
@@ -100,7 +102,7 @@ export default function AdminSettings() {
 
                                         <div className="d-flex flex-wrap gap-3">
                                                 <div>
-                                                        <label className="form-label"> opening hour </label>
+                                                        <label className="form-label">Opening hour</label>
                                                         <input className="form-control" style={{ maxWidth: 140 }} value={s.defaultOpenStart} onChange={onChange('defaultOpenStart')} placeholder="08:00" />
                                                 </div>
                                                 <div>
@@ -111,7 +113,6 @@ export default function AdminSettings() {
                                                 <div style={{ minWidth: 320 }}>
                                                         <label className="form-label">Admin contact</label>
                                                         <input className="form-control" value={s.telegramLink || ''} onChange={onChange('telegramLink')} placeholder="https://t.me/your_handle" />
-
                                                 </div>
                                         </div>
                                 </div>
@@ -123,15 +124,20 @@ export default function AdminSettings() {
                                 <div className="card-body d-flex flex-wrap align-items-end gap-3">
                                         <div className="form-check form-switch">
                                                 <input className="form-check-input" type="checkbox" id="autoCancel" checked={s.autoCancelEnabled} onChange={onChange('autoCancelEnabled')} />
-                                                <label className="form-check-label" htmlFor="autoCancel">auto-cancellation</label>
+                                                <label className="form-check-label" htmlFor="autoCancel">Auto-cancellation</label>
                                         </div>
                                         <div>
-                                                <label className="form-label"></label
-                                                >
-                                                <input className="form-control" style={{ maxWidth: 120 }} type="number" min="1" step="1"
+                                                <label className="form-label">Grace minutes</label>
+                                                <input
+                                                        className="form-control"
+                                                        style={{ maxWidth: 120 }}
+                                                        type="number"
+                                                        min="1"
+                                                        step="1"
                                                         disabled={!s.autoCancelEnabled}
                                                         value={s.autoCancelGraceMinutes}
-                                                        onChange={onChange('autoCancelGraceMinutes')} />
+                                                        onChange={onChange('autoCancelGraceMinutes')}
+                                                />
                                         </div>
                                 </div>
                         </div>
@@ -156,17 +162,12 @@ export default function AdminSettings() {
                                                         <option value="pdf">PDF</option>
                                                 </select>
                                         </div>
-                                        <button className="btn btn-primary" disabled={exporting} onClick={exportReport}
-                                                style={{
-                                                        backgroundColor: '#252444', // primary color
-                                                        borderColor: '#252444',
-                                                        color: '#fff'
-                                                }}
-
-                                                onMouseLeave={(e) => {
-                                                        e.currentTarget.style.backgroundColor = '#252444';
-
-                                                }}
+                                        <button
+                                                className="btn btn-primary"
+                                                disabled={exporting}
+                                                onClick={exportReport}
+                                                style={{ backgroundColor: '#252444', borderColor: '#252444', color: '#fff' }}
+                                                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#252444'; }}
                                         >
                                                 {exporting ? 'Exporting…' : 'Download report'}
                                         </button>
@@ -174,12 +175,11 @@ export default function AdminSettings() {
                         </div>
 
                         <div className="d-flex gap-2">
-                                <button className="btn btn-success" disabled={saving} onClick={save}
-                                        style={{
-                                                backgroundColor: '#252444', // primary color
-                                                borderColor: '#252444',
-                                                color: '#fff'
-                                        }}
+                                <button
+                                        className="btn btn-success"
+                                        disabled={saving}
+                                        onClick={save}
+                                        style={{ backgroundColor: '#252444', borderColor: '#252444', color: '#fff' }}
                                 >
                                         {saving ? 'Saving…' : 'Save settings'}
                                 </button>
