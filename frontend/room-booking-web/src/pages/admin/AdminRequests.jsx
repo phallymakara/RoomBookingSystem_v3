@@ -329,11 +329,12 @@ export default function AdminRequests() {
                                                                                                         <i className="bi bi-x-lg me-1"></i>Reject
                                                                                                 </button>
 
-                                                                                                <button
-                                                                                                        type="button"
-                                                                                                        className="btn btn-sm btn-outline-secondary"
-                                                                                                        onClick={() => onCancel(b.id)}
-                                                                                                >
+                                                                                                <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => onCancel(b.id)}>Cancel</button>
+                                                                                        </div>
+                                                                                )}
+                                                                                {b.status === 'CONFIRMED' && (
+                                                                                        <div className="mt-2 d-flex flex-wrap gap-2">
+                                                                                                <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => onCancel(b.id)}>
                                                                                                         Cancel
                                                                                                 </button>
                                                                                         </div>

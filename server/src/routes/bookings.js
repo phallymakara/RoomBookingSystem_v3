@@ -197,28 +197,29 @@ router.post('/admin/booking-requests/:id/approve', authGuard, requireAdmin, asyn
                         },
                 });
 
+
                 // 2) write slot note so it renders as "In use" with course+reason in both UIs
+                const { slotKeys } = await import('../lib/timeSlots.js'); // adjust path if TS
                 const { weekday, startHHMM, endHHMM } = slotKeys(b.startTs, b.endTs);
+
+                // upsert the weekly note shown on the student grid
                 await tx.roomSlotNote.upsert({
                         where: {
                                 roomId_weekday_startHHMM_endHHMM: {
                                         roomId: b.roomId, weekday, startHHMM, endHHMM
                                 }
                         },
-                        update: {
-                                professor: b.user?.name || b.user?.email || '',
-                                course: b.courseName || '',
-                                reason: b.reason || null,
-                        },
                         create: {
-                                roomId: b.roomId,
-                                weekday,
-                                startHHMM,
-                                endHHMM,
-                                professor: b.user?.name || b.user?.email || '',
-                                course: b.courseName || '',
-                                reason: b.reason || null,
+                                roomId: b.roomId, weekday, startHHMM, endHHMM,
+                                professor: b.user?.name ?? '',
+                                course: b.courseName ?? '',
+                                reason: b.reason ?? '',
                         },
+                        update: {
+                                professor: b.user?.name ?? '',
+                                course: b.courseName ?? '',
+                                reason: b.reason ?? '',
+                        }
                 });
 
                 return b;
@@ -229,13 +230,13 @@ router.post('/admin/booking-requests/:id/approve', authGuard, requireAdmin, asyn
                 await emitAdmin({
                         type: 'BOOKING_REQUEST_DECIDED',
                         payload: {
-                                id: booking.id,
-                                status: booking.status,
-                                roomName: booking.room?.name ?? '',
-                                userName: booking.user?.name ?? '',
-                                studentId: booking.studentId ?? '',
-                                courseName: booking.courseName ?? '',
-                                reason: booking.reason ?? ''
+                                id: updated.id,
+                                status: updated.status,
+                                roomName: updated.room?.name ?? '',
+                                userName: updated.user?.name ?? '',
+                                studentId: updated.studentId ?? '',
+                                courseName: updated.courseName,
+                                reason: updated.reason,
                         }
                 });
         } catch (error) {
@@ -394,9 +395,19 @@ router.delete('/:id', authGuard, async (req, res) => {
                 return res.status(403).json({ error: 'Forbidden' });
         }
 
-        await prisma.booking.update({
-                where: { id: bookingId },
-                data: { status: 'CANCELLED' }
+        await prisma.$transaction(async (tx) => {
+                await tx.booking.update({
+                        where: { id: bookingId },
+                        data: { status: 'CANCELLED' }
+                });
+                // If admin cancels a confirmed slot, wipe the slot-note too
+                if (req.user.role === 'ADMIN' && existing.status === 'CONFIRMED') {
+                        const { slotKeys } = await import('../lib/timeSlots.js');
+                        const { weekday, startHHMM, endHHMM } = slotKeys(existing.startTs, existing.endTs);
+                        await tx.roomSlotNote.deleteMany({
+                                where: { roomId: existing.roomId, weekday, startHHMM, endHHMM },
+                        });
+                }
         });
 
         res.status(204).send();
